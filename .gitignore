@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Raw traces are large; keep them local.
+data/raw/
+
+# IEEE-copyrighted paper: do not publish. Cite it instead.
+MCG-Sched_Multi-Cluster_GPU_Scheduling_for_Resource_Fragmentation_Reduction_and_Load_Balancing.pdf
+
+# Team plan with member names: kept local unless the team decides to publish it.
+MCG_Sched_Complete_Project_Plan.pdf

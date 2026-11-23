@@ -1,0 +1,14 @@
+{
+  "name": "venus15_placeholder",
+  "note": "PLACEHOLDER. Paper Sec. VI-C: 15 virtual clusters, 135 nodes, 8 GPUs each = 1080 GPUs, with a different node count per cluster. The paper does not list the per-cluster counts; the sizes below are invented so the totals match. Replace with the counts reconstructed from the Venus virtual-cluster file.",
+  "clusters": [
+    {"servers": 4, "gpus_per_server": 8},
+    {"servers": 6, "gpus_per_server": 8},
+    {"servers": 7, "gpus_per_server": 8},
+    {"servers": 8, "gpus_per_server": 8},
+    {"count": 4, "servers": 9, "gpus_per_server": 8},
+    {"count": 4, "servers": 10, "gpus_per_server": 8},
+    {"count": 2, "servers": 11, "gpus_per_server": 8},
+    {"servers": 12, "gpus_per_server": 8}
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "toy",
+  "note": "2 clusters x 2 servers x 4 GPUs. For hand-checked tests and demos.",
+  "clusters": [
+    {"count": 2, "servers": 2, "gpus_per_server": 4}
+  ]
+}
