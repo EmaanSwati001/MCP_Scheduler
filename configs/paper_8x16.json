@@ -1,0 +1,7 @@
+{
+  "name": "paper_8x16",
+  "note": "Paper Fig. 6(a): 8 clusters x 16 nodes x 8 GPUs = 1024 GPUs.",
+  "clusters": [
+    {"count": 8, "servers": 16, "gpus_per_server": 8}
+  ]
+}
