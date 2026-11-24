@@ -1,0 +1,66 @@
+{
+  "name": "uranus",
+  "note": "Built from data\\raw\\HeliosData\\data\\Uranus\\cluster_gpu_number.csv on 2020-09-04: one cluster per virtual cluster.",
+  "clusters": [
+    {
+      "servers": 28,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 35,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 17,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 7,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 20,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 1,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 16,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 41,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 10,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 7,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 18,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 52,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 1,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 2,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 4,
+      "gpus_per_server": 8
+    }
+  ]
+}

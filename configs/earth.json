@@ -1,0 +1,82 @@
+{
+  "name": "earth",
+  "note": "Built from data\\raw\\HeliosData\\data\\Earth\\cluster_gpu_number.csv on 2020-09-04: one cluster per virtual cluster.",
+  "clusters": [
+    {
+      "servers": 8,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 12,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 22,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 27,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 5,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 5,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 9,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 12,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 4,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 8,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 7,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 8,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 4,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 8,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 2,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 2,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 2,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 1,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 8,
+      "gpus_per_server": 8
+    }
+  ]
+}
