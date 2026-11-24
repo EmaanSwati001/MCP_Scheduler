@@ -1,0 +1,98 @@
+{
+  "name": "saturn",
+  "note": "Built from data\\raw\\HeliosData\\data\\Saturn\\cluster_gpu_number.csv on 2020-09-04: one cluster per virtual cluster.",
+  "clusters": [
+    {
+      "servers": 19,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 15,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 28,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 5,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 6,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 34,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 1,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 28,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 20,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 6,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 18,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 18,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 10,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 16,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 4,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 4,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 4,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 16,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 2,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 2,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 1,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 2,
+      "gpus_per_server": 8
+    },
+    {
+      "servers": 3,
+      "gpus_per_server": 8
+    }
+  ]
+}

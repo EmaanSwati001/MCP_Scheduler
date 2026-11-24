@@ -1,9 +1,14 @@
 from .base import Placement, Scheduler
+from .baselines import FGD, Consolidate, MASTLike, RandomPlacement
 from .fcfs import FCFSFirstFit
 
 # Register new policies here so run.py and the dashboard can find them by name.
 REGISTRY = {
     FCFSFirstFit.name: FCFSFirstFit,
+    RandomPlacement.name: RandomPlacement,
+    Consolidate.name: Consolidate,
+    FGD.name: FGD,
+    MASTLike.name: MASTLike,
 }
 
 
