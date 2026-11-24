@@ -1,0 +1,185 @@
+{
+  "helios": {
+    "Venus": {
+      "log_sha256": "41153105b5a1beedfc9f3d5151126d8a2b446ba5699a60a41522a6795e726cac",
+      "gpu_file_sha256": "08c05fc4d2ac94aceb43f2bfd28d731a089df8e9bb7c3412d2bd211cab2ed57c",
+      "filters": {
+        "raw": 246708,
+        "steps": [
+          {
+            "rule": "state == COMPLETED",
+            "remaining": 170320
+          },
+          {
+            "rule": "gpu_num >= 1 (GPU job)",
+            "remaining": 65912
+          },
+          {
+            "rule": "node_num == 1 and gpu_num <= 8 (single server)",
+            "remaining": 61268
+          },
+          {
+            "rule": "duration > 0",
+            "remaining": 61268
+          }
+        ],
+        "kept": 61268
+      },
+      "window_start": "2020-09-04T00:00:00",
+      "window_days": 15,
+      "jobs_in_window": 6941,
+      "mean_duration_s": 9638.2,
+      "topology": {
+        "clusters": 15,
+        "gpus": 1080,
+        "file_total": 1080
+      },
+      "config": "venus15.json"
+    },
+    "Earth": {
+      "log_sha256": "bb62d7842ee50a093c1f872afa293a8e27500f38dfc5cd1dab3b10c53746b3db",
+      "gpu_file_sha256": "cd85b21f9b2651a64ed7ecb86f2c5dea771a3bd55d41537eea976b61aa00642f",
+      "filters": {
+        "raw": 872886,
+        "steps": [
+          {
+            "rule": "state == COMPLETED",
+            "remaining": 708616
+          },
+          {
+            "rule": "gpu_num >= 1 (GPU job)",
+            "remaining": 313953
+          },
+          {
+            "rule": "node_num == 1 and gpu_num <= 8 (single server)",
+            "remaining": 309913
+          },
+          {
+            "rule": "duration > 0",
+            "remaining": 309913
+          }
+        ],
+        "kept": 309913
+      },
+      "window_start": "2020-09-04T00:00:00",
+      "window_days": 15,
+      "jobs_in_window": 23815,
+      "mean_duration_s": 6220.8,
+      "topology": {
+        "clusters": 19,
+        "gpus": 1232,
+        "file_total": 1232
+      },
+      "config": "earth.json"
+    },
+    "Saturn": {
+      "log_sha256": "f991918de22dd88fd87ed4f4d8b3b8beb34a19a57007037298c08e48d56c2377",
+      "gpu_file_sha256": "d8760e0e69a43ef2c86eb4316436cdebdf513fc5c2742d43875ddcf546bfae5a",
+      "filters": {
+        "raw": 1753078,
+        "steps": [
+          {
+            "rule": "state == COMPLETED",
+            "remaining": 1401406
+          },
+          {
+            "rule": "gpu_num >= 1 (GPU job)",
+            "remaining": 406982
+          },
+          {
+            "rule": "node_num == 1 and gpu_num <= 8 (single server)",
+            "remaining": 393405
+          },
+          {
+            "rule": "duration > 0",
+            "remaining": 393405
+          }
+        ],
+        "kept": 393405
+      },
+      "window_start": "2020-09-04T00:00:00",
+      "window_days": 15,
+      "jobs_in_window": 24921,
+      "mean_duration_s": 5534.0,
+      "topology": {
+        "clusters": 23,
+        "gpus": 2096,
+        "file_total": 2096
+      },
+      "config": "saturn.json"
+    },
+    "Uranus": {
+      "log_sha256": "785e4154cefb45dba55bdfb8c3d313f101cd75dbe78b158a09f387ef8f4418af",
+      "gpu_file_sha256": "b824e9d839423571f7570a72b3712b0a547926f70ab3d73b9d18b0df3be17e49",
+      "filters": {
+        "raw": 490309,
+        "steps": [
+          {
+            "rule": "state == COMPLETED",
+            "remaining": 327440
+          },
+          {
+            "rule": "gpu_num >= 1 (GPU job)",
+            "remaining": 199930
+          },
+          {
+            "rule": "node_num == 1 and gpu_num <= 8 (single server)",
+            "remaining": 188608
+          },
+          {
+            "rule": "duration > 0",
+            "remaining": 188608
+          }
+        ],
+        "kept": 188608
+      },
+      "window_start": "2020-09-04T00:00:00",
+      "window_days": 15,
+      "jobs_in_window": 16858,
+      "mean_duration_s": 6139.9,
+      "topology": {
+        "clusters": 15,
+        "gpus": 2072,
+        "file_total": 2072
+      },
+      "config": "uranus.json"
+    }
+  },
+  "philly": {
+    "log_sha256": "aedddbb94523e7ddf454284ce3f3211ce7175f16dd189e5f00195603c65472c6",
+    "filters": {
+      "raw": 117325,
+      "steps": [
+        {
+          "rule": "status == \"Pass\"",
+          "remaining": 84358
+        },
+        {
+          "rule": "has at least one attempt",
+          "remaining": 83161
+        },
+        {
+          "rule": "single machine in last attempt",
+          "remaining": 82010
+        },
+        {
+          "rule": "at least one GPU",
+          "remaining": 82010
+        },
+        {
+          "rule": "submit, start and end times present",
+          "remaining": 81996
+        },
+        {
+          "rule": "duration > 0",
+          "remaining": 81995
+        }
+      ],
+      "kept": 81995
+    },
+    "window_start": "2017-12-02T00:00:00",
+    "window_days": 7,
+    "jobs_in_window": 5043,
+    "mean_duration_s": 14802.1
+  }
+}
