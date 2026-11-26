@@ -1,0 +1,34 @@
+[
+ {
+  "trace": "venus",
+  "eta": 10,
+  "all_candidates": {
+   "n": 2677,
+   "median_abs_G": 0.47870418013048766,
+   "median_sigma2": 0.007961637885147144,
+   "ratio": 60.126344231698305
+  },
+  "chosen_placements": {
+   "n": 7708,
+   "median_abs_G": 0.2167887962084366,
+   "median_sigma2": 0.0028980034722222436,
+   "ratio": 74.8062582693177
+  }
+ },
+ {
+  "trace": "venus",
+  "eta": 15,
+  "all_candidates": {
+   "n": 2476,
+   "median_abs_G": 0.3543695846859418,
+   "median_sigma2": 0.007562716450928764,
+   "ratio": 46.85744692205435
+  },
+  "chosen_placements": {
+   "n": 7969,
+   "median_abs_G": 0.22149746440209447,
+   "median_sigma2": 0.002651321681231167,
+   "ratio": 83.54228231530169
+  }
+ }
+]

@@ -98,3 +98,31 @@ to every scheduler.
 
 For the dashboard, use `Simulator(jobs, state, scheduler, listener)` and call `step()`;
 the listener receives `"arrival"`, `"reject"`, `"start"` and `"finish"` events.
+
+## Fairness (N1) and score normalisation (N4)
+
+Code: `mcgsched/schedulers/mcg_fair.py`, `mcgsched/mechanisms/reservations.py`,
+`mcgsched/evaluation/fairness.py`, `experiments/run_fairness_experiments.py`, `tests/test_fairness_and_normalisation.py`.
+`mcg.py` is not touched. `MCGFair` subclasses `MCGSched`; with default arguments it makes
+identical decisions (tested).
+
+| Registry name | What it adds |
+|---|---|
+| `mcg_aging` | window order uses `v - beta * min(wait / W_ref, 5)` |
+| `mcg_guard` | job waiting `>= k * W_ref` goes first; if it cannot start, everything behind it waits (blocking, no reservation) |
+| `mcg_fair` | aging + guard + drain reservation: a protected job that cannot start reserves the server needing the fewest running jobs to finish; no other job is placed there; other servers keep working |
+| `mcg_norm` | G and sigma^2 min-max scaled over one candidate pool per round (distinct request sizes in the window) |
+
+`W_ref` is the mean job duration of the trace, fixed for the run. Defaults: `beta=1`, `k=3`,
+`max_reservations=1`. All are constructor arguments, e.g. `get_scheduler("mcg_fair", k=1.0, beta=0)`.
+No preemption and no runtime estimates are used; a reservation only picks a server whose
+capacity can hold the job, so the job can always eventually start.
+
+Dashboard hooks on the scheduler object: `reserved_servers()` (job_id -> (cluster, server)),
+`protected_ids`, and `log` of `(time, "protect" | "reserve" | "release", job_id, server)`.
+
+```
+python -m pytest tests -q
+python run.py --topology configs/venus15.json --trace data/clean/venus.csv --eta 15 --scheduler mcg mcg_fair
+python experiments/run_fairness_experiments.py            # E4 + E7, about 2 minutes, writes results/E4_E7_fairness_results.md
+```
