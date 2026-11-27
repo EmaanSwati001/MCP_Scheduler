@@ -1,15 +1,10 @@
-"""MCG-Sched Live Dashboard (Person 5 – Streamlit).
+"""MCG-Sched Live Dashboard (Streamlit fallback).
 
 Launch:
     streamlit run dashboard/app.py
 
-The dashboard calls the REAL simulation engine – no pre-computed screenshots.
-Every button press runs Python code in mcgsched/.
-
-Tabs:
-  1. Run & Visualise  – step / play / run; GPU grid; queue; score table; metrics.
-  2. Compare          – run all selected schedulers on the same workload side-by-side.
-  3. E5 Experiment    – homogeneous vs mixed topology, original F vs F_C.
+Note: For the full modern web UI, run:
+    python -m dashboard.server
 """
 from __future__ import annotations
 
@@ -530,10 +525,9 @@ def tab_e5():
 # ---------------------------------------------------------------------------
 # Main layout with tabs
 # ---------------------------------------------------------------------------
-st.title("🖥️ MCG-Sched: Live Simulation Dashboard")
+st.title("MCG-Sched: Multi-Cluster GPU Scheduler")
 st.caption(
-    "Person 5 (N2 + Dashboard) · "
-    "Real simulator engine · no pre-computed results"
+    "Fairness- & Heterogeneity-Aware Resource Management · Real Discrete-Event Simulator"
 )
 
 tab1, tab2, tab3 = st.tabs(["▶ Run & Visualise", "📊 Compare", "🧪 E5 Experiment"])
