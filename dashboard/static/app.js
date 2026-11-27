@@ -1,4 +1,4 @@
-/* MCG-Sched 60fps Live Animated Simulator Frontend */
+/* MCG-Sched Warm Editorial 60fps Animated Simulator */
 
 const SESSION_ID = "sim_" + Math.random().toString(36).slice(2, 10);
 
@@ -15,10 +15,9 @@ let LAST_COMPARE_DATA = null;
 let SAVED_RESEARCH = null;
 let CHARTS = {};
 
-// 60fps particle animations on #flow-canvas
 const PARTICLES = [];
 const RIPPLES = [];
-const PALETTE = ["#3b82f6", "#14b8a6", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"];
+const CHART_PALETTE = ["#b8532f", "#2c6e49", "#b77213", "#475569", "#7c3aed", "#0e7490"];
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -200,8 +199,8 @@ async function onPolicyChange() {
 function setStatus(state, text) {
   const dot = document.getElementById("status-dot");
   dot.className = "w-2 h-2 rounded-full " + (
-    state === "running" ? "bg-blue-400 animate-ping" :
-    state === "done" ? "bg-teal-400" : "bg-amber-400"
+    state === "running" ? "bg-[#b8532f] animate-ping" :
+    state === "done" ? "bg-[#2c6e49]" : "bg-[#b77213]"
   );
   document.getElementById("status-text").textContent = text;
 }
@@ -251,13 +250,14 @@ async function runToEnd() {
   FRAME_BUFFER = [];
   if (!SNAPSHOT) return;
   setStatus("running", "Completing...");
-  document.getElementById("btn-run-end").disabled = true;
+  const btn = document.getElementById("btn-run-end");
+  if (btn) btn.disabled = true;
   try {
     const endSnap = await apiPost("/api/sim/run", { session_id: SESSION_ID });
     applySnapshot(endSnap, false);
     setStatus("done", "Complete");
   } finally {
-    document.getElementById("btn-run-end").disabled = SNAPSHOT?.done ?? false;
+    if (btn) btn.disabled = SNAPSHOT?.done ?? false;
   }
 }
 
@@ -272,10 +272,10 @@ function startPlay() {
   LAST_STEP_AT = performance.now();
   const btn = document.getElementById("btn-play");
   btn.innerHTML = `<i data-lucide="pause" class="w-3.5 h-3.5"></i> Pause`;
-  btn.classList.remove("btn-blue");
-  btn.classList.add("btn-amber");
+  btn.classList.remove("btn-primary");
+  btn.classList.add("btn-ochre");
   lucide.createIcons();
-  setStatus("running", "Live");
+  setStatus("running", "Running");
   prefetchBatch();
 }
 
@@ -284,8 +284,8 @@ function stopPlay() {
   const btn = document.getElementById("btn-play");
   if (btn) {
     btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Play`;
-    btn.classList.add("btn-blue");
-    btn.classList.remove("btn-amber");
+    btn.classList.add("btn-primary");
+    btn.classList.remove("btn-ochre");
     lucide.createIcons();
   }
   if (SNAPSHOT && !SNAPSHOT.done) setStatus("idle", "Paused");
@@ -315,10 +315,10 @@ function animationLoop(nowMs) {
   requestAnimationFrame(animationLoop);
 
   if (IS_PLAYING && SNAPSHOT && !SNAPSHOT.done) {
-    const interval = parseInt(document.getElementById("play-speed").value || "180", 10);
+    const speedEl = document.getElementById("play-speed");
+    const interval = parseInt(speedEl ? speedEl.value : "180", 10);
     const elapsed = nowMs - LAST_STEP_AT;
 
-    // Smooth clock interpolation between frames
     if (FRAME_BUFFER.length > 0) {
       const nextTarget = FRAME_BUFFER[0].now;
       const frac = Math.min(1, elapsed / interval);
@@ -353,32 +353,34 @@ function applySnapshot(snap, animateParticles) {
   }
 
   const m = snap.metrics;
-  const pct = snap.total_jobs > 0 ? Math.round((m.completed / snap.total_jobs) * 100) : 0;
-
   document.getElementById("kpi-util").textContent = `${m.utilization_pct.toFixed(1)}%`;
   document.getElementById("kpi-gpus-sub").textContent = `${m.used_gpus.toLocaleString()} / ${m.total_gpus.toLocaleString()} GPUs`;
   document.getElementById("util-progress-bar").style.width = `${m.utilization_pct}%`;
 
-  document.getElementById("kpi-wait-cnt").textContent = `${m.waiting} jobs`;
+  document.getElementById("kpi-wait-cnt").textContent = `${m.waiting} queued`;
   document.getElementById("kpi-avg-wait").textContent = `Avg wait: ${fmtShortTime(snap.summary ? snap.summary.avg_wait : m.avg_wait)}`;
-  document.getElementById("kpi-running-sub").textContent = `${m.running} running · P99: ${fmtShortTime(snap.summary ? snap.summary.p99_wait : m.p99_wait)}`;
+  document.getElementById("kpi-done").textContent = `${m.completed.toLocaleString()} / ${snap.total_jobs.toLocaleString()} done`;
 
   document.getElementById("kpi-lb").textContent = (snap.summary ? snap.summary.avg_lb_index : m.lb_index).toFixed(4);
-  document.getElementById("kpi-stranded").textContent = `${m.stranded_gpus} stranded`;
+  const resBadge = document.getElementById("kpi-res-badge");
+  if (m.reserved_count > 0) {
+    resBadge.textContent = `${m.reserved_count} reserved`;
+    resBadge.classList.remove("hidden");
+  } else {
+    resBadge.classList.add("hidden");
+  }
 
-  document.getElementById("kpi-done").textContent = `${m.completed.toLocaleString()} / ${snap.total_jobs.toLocaleString()}`;
-  document.getElementById("kpi-res-badge").textContent = `${m.reserved_count} reserved`;
-  document.getElementById("sim-progress-bar").style.width = `${pct}%`;
+  document.getElementById("running-mini").textContent = `${m.running} running`;
 
   document.getElementById("btn-step1").disabled = snap.done;
   document.getElementById("btn-play").disabled = snap.done;
-  document.getElementById("btn-run-end").disabled = snap.done;
+  const btnEnd = document.getElementById("btn-run-end");
+  if (btnEnd) btnEnd.disabled = snap.done;
 
   renderQueueBlocks();
   renderDecisionSpotlight();
   updateClusterMapInPlace(animateParticles);
   renderLiveChart();
-  renderEventTicker();
 
   if (animateParticles) {
     spawnDispatchParticles();
@@ -386,7 +388,7 @@ function applySnapshot(snap, animateParticles) {
 }
 
 // ---------------------------------------------------------------------------
-// In-Place 5x3 Cluster Map (Zero Flicker)
+// Clean 5x3 Cluster Capacity Bars (Zero Pixel Clutter)
 // ---------------------------------------------------------------------------
 function ensureClusterMapBuilt() {
   const s = SNAPSHOT;
@@ -401,23 +403,21 @@ function ensureClusterMapBuilt() {
     cap4 > 0 ? `${cap4}×4G + ${cap8}×8G Mixed` : `${cap8}×8G Homogeneous`;
 
   document.getElementById("cluster-map").innerHTML = s.clusters.map(c => {
-    const strips = c.servers.map(sv => {
-      let dots = "";
-      for (let i = 0; i < sv.capacity; i++) {
-        dots += `<span class="g-dot" id="gd-${c.cluster_id}_${sv.server_id}_${i}"></span>`;
-      }
-      return `<div id="srv-${c.cluster_id}_${sv.server_id}" class="srv-strip ${sv.capacity <= 4 ? "cap4" : ""}">${dots}</div>`;
-    }).join("");
+    const bars = c.servers.map(sv =>
+      `<div id="srv-${c.cluster_id}_${sv.server_id}" class="srv-bar ${sv.capacity <= 4 ? "cap4" : ""}">
+        <div id="sfill-${c.cluster_id}_${sv.server_id}" class="srv-fill" style="width:0%"></div>
+      </div>`
+    ).join("");
 
     return `<div id="ctile-${c.cluster_id}" class="c-tile">
       <div class="flex items-center justify-between text-[11px]">
-        <span class="font-semibold text-slate-200">C${c.cluster_id}</span>
-        <span id="cpct-${c.cluster_id}" class="mono text-slate-400">0%</span>
+        <span class="font-bold text-[#1d1b18]">C${c.cluster_id}</span>
+        <span id="cpct-${c.cluster_id}" class="mono text-[#5c574e]">0%</span>
       </div>
-      <div class="w-full h-1 bg-[#181c26] rounded-full overflow-hidden">
-        <div id="cbar-${c.cluster_id}" class="h-full bg-blue-500 transition-all duration-200" style="width:0%"></div>
+      <div class="w-full h-1.5 bg-[#e5dfd3] rounded-full overflow-hidden">
+        <div id="cbar-${c.cluster_id}" class="h-full bg-[#2c6e49] transition-all duration-200" style="width:0%"></div>
       </div>
-      <div class="srv-strip-wrap">${strips}</div>
+      <div class="srv-bars-wrap">${bars}</div>
     </div>`;
   }).join("");
 }
@@ -446,10 +446,14 @@ function updateClusterMapInPlace(flashChanges) {
     c.servers.forEach(sv => {
       const key = `${c.cluster_id}_${sv.server_id}`;
       const srvEl = document.getElementById(`srv-${key}`);
-      if (!srvEl) return;
+      const fillEl = document.getElementById(`sfill-${key}`);
+      if (!srvEl || !fillEl) return;
 
       const isRes = sv.reserved_for !== null;
       if (isRes) hasRes = true;
+
+      const fillPct = sv.capacity > 0 ? Math.round((sv.used / sv.capacity) * 100) : 0;
+      fillEl.style.width = `${fillPct}%`;
 
       srvEl.classList.toggle("reserved", isRes);
       if (flashChanges) {
@@ -468,22 +472,9 @@ function updateClusterMapInPlace(flashChanges) {
         : "Idle";
       srvEl.title = `Cluster ${c.cluster_id} · Server ${sv.server_id} (${sv.capacity}G) | ${sv.used}/${sv.capacity} GPUs | ${runStr}` +
         (isRes ? ` | RESERVED for Job #${sv.reserved_for}` : "");
-
-      for (let i = 0; i < sv.capacity; i++) {
-        const dot = document.getElementById(`gd-${key}_${i}`);
-        if (!dot) continue;
-        if (i < sv.used) {
-          dot.className = sv.capacity >= 8 && sv.used === 8 ? "g-dot on8" : "g-dot on";
-        } else {
-          dot.className = isRes ? "g-dot res" : "g-dot";
-        }
-      }
     });
 
-    if (tileEl) {
-      tileEl.classList.toggle("hot", uPct >= 80);
-      tileEl.classList.toggle("has-reserve", hasRes);
-    }
+    if (tileEl) tileEl.classList.toggle("has-reserve", hasRes);
   });
 }
 
@@ -495,13 +486,13 @@ function spawnDispatchParticles() {
   const qBox = document.getElementById("queue-blocks");
   if (!stage || !qBox || !SNAPSHOT) return;
 
-  const started = (SNAPSHOT.step_started || []).filter(x => x.placement).slice(0, 8);
+  const started = (SNAPSHOT.step_started || []).filter(x => x.placement).slice(0, 6);
   if (started.length === 0) return;
 
   const stageRect = stage.getBoundingClientRect();
   const qRect = qBox.getBoundingClientRect();
-  const sx = qRect.right - stageRect.left - 12;
-  const sy = qRect.top - stageRect.top + 42;
+  const sx = qRect.right - stageRect.left - 10;
+  const sy = qRect.top - stageRect.top + 38;
 
   started.forEach((item, idx) => {
     const [cid, sid] = item.placement;
@@ -511,14 +502,14 @@ function spawnDispatchParticles() {
     const tx = sRect.left - stageRect.left + sRect.width / 2;
     const ty = sRect.top - stageRect.top + sRect.height / 2;
 
-    const col = item.gpus >= 8 ? "#a855f7" : item.gpus >= 4 ? "#3b82f6" : item.gpus >= 2 ? "#14b8a6" : "#60a5fa";
+    const col = item.gpus >= 8 ? "#b8532f" : item.gpus >= 4 ? "#2c6e49" : "#b77213";
     PARTICLES.push({
-      sx, sy: sy + (idx % 4) * 18,
+      sx, sy: sy + (idx % 3) * 18,
       tx, ty,
       cx: (sx + tx) * 0.5,
-      cy: Math.min(sy, ty) - 35 - (idx % 3) * 15,
+      cy: Math.min(sy, ty) - 32 - (idx % 2) * 14,
       progress: 0,
-      speed: 0.045,
+      speed: 0.048,
       color: col,
       gpus: item.gpus,
     });
@@ -544,39 +535,33 @@ function drawFlowCanvas() {
     const p = PARTICLES[i];
     p.progress += p.speed;
     if (p.progress >= 1) {
-      RIPPLES.push({ x: p.tx, y: p.ty, r: 4, alpha: 0.9, color: p.color });
+      RIPPLES.push({ x: p.tx, y: p.ty, r: 4, alpha: 0.85, color: p.color });
       PARTICLES.splice(i, 1);
       continue;
     }
 
-    // Quadratic Bezier point at t = easeOutCubic(p.progress)
     const t = 1 - Math.pow(1 - p.progress, 3);
     const omt = 1 - t;
     const x = omt * omt * p.sx + 2 * omt * t * p.cx + t * t * p.tx;
     const y = omt * omt * p.sy + 2 * omt * t * p.cy + t * t * p.ty;
 
-    // Subtle faint guide trail
     ctx.beginPath();
     ctx.moveTo(p.sx, p.sy);
     ctx.quadraticCurveTo(p.cx, p.cy, x, y);
-    ctx.strokeStyle = p.color + "44";
-    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = p.color + "55";
+    ctx.lineWidth = 1.8;
     ctx.stroke();
 
-    // Glowing packet head
     ctx.beginPath();
-    ctx.arc(x, y, p.gpus >= 4 ? 5 : 3.8, 0, Math.PI * 2);
+    ctx.arc(x, y, p.gpus >= 4 ? 5 : 4, 0, Math.PI * 2);
     ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 10;
     ctx.fill();
-    ctx.shadowBlur = 0;
   }
 
   for (let i = RIPPLES.length - 1; i >= 0; i--) {
     const r = RIPPLES[i];
-    r.r += 1.2;
-    r.alpha -= 0.045;
+    r.r += 1.1;
+    r.alpha -= 0.05;
     if (r.alpha <= 0) {
       RIPPLES.splice(i, 1);
       continue;
@@ -592,7 +577,7 @@ function drawFlowCanvas() {
 }
 
 // ---------------------------------------------------------------------------
-// Queue, Decision Spotlight, Chart & Event Stream
+// Queue, Decision Spotlight & Sparkline
 // ---------------------------------------------------------------------------
 function renderQueueBlocks() {
   const s = SNAPSHOT;
@@ -600,25 +585,22 @@ function renderQueueBlocks() {
   const box = document.getElementById("queue-blocks");
 
   if (s.queue.length === 0) {
-    box.innerHTML = `<div class="py-10 text-center text-xs text-slate-500">Queue empty — all arrived jobs placed.</div>`;
+    box.innerHTML = `<div class="py-10 text-center text-xs text-[#847d72]">Queue empty — all arrived jobs placed.</div>`;
     return;
   }
 
-  box.innerHTML = s.queue.slice(0, 7).map(j => {
+  box.innerHTML = s.queue.slice(0, 5).map(j => {
     const gCls = j.gpus >= 8 ? "g8" : j.gpus >= 4 ? "g4" : j.gpus >= 2 ? "g2" : "g1";
-    let pips = "";
-    for (let i = 0; i < j.gpus; i++) pips += `<span class="pip ${gCls}"></span>`;
-
     const badge = j.protected
-      ? `<span class="tag tag-amber">PROTECTED</span>`
-      : `<span class="mono text-[11px] text-slate-400">${Math.round(j.waited)}s</span>`;
+      ? `<span class="tag tag-ochre">PROTECTED</span>`
+      : `<span class="mono text-[11px] text-[#5c574e]">${Math.round(j.waited)}s</span>`;
 
     return `<div class="q-item ${j.protected ? "protected" : ""}">
       <div class="flex items-center gap-2.5">
-        <div class="gpu-pips">${pips}</div>
+        <span class="gpu-pill-bar ${gCls} mono">${j.gpus}G</span>
         <div>
-          <div class="mono text-xs font-semibold text-white">Job #${j.job_id}</div>
-          <div class="text-[10.5px] text-slate-400">${j.gpus} GPU${j.gpus > 1 ? "s" : ""} · ${Math.round(j.duration)}s</div>
+          <div class="mono text-xs font-semibold text-[#1d1b18]">Job #${j.job_id}</div>
+          <div class="text-[11px] text-[#847d72]">dur ${Math.round(j.duration)}s</div>
         </div>
       </div>
       ${badge}
@@ -629,36 +611,27 @@ function renderQueueBlocks() {
 function renderDecisionSpotlight() {
   const d = SNAPSHOT?.last_decision;
   const box = document.getElementById("decision-spotlight");
-  document.getElementById("decision-clock").textContent = d ? `t = ${d.time}s` : "";
-
   if (!d) {
-    box.innerHTML = `<span class="text-slate-500">Waiting for first placement decision...</span>`;
+    box.innerHTML = `<span class="text-[#847d72]">Waiting for placement...</span>`;
     return;
   }
-
   const placed = d.placements.find(p => p.job_id === d.focal_job_id);
-  const cand = d.candidates.find(c => c.selected);
-  box.innerHTML = `
-    <div class="flex items-center justify-between mb-1.5">
-      <span class="mono font-semibold text-white">Job #${d.focal_job_id} (${d.focal_gpus}G)</span>
-      ${placed
-        ? `<span class="tag tag-teal">→ C${placed.cluster_id} · S${placed.server_id}</span>`
-        : `<span class="tag tag-amber">Waiting</span>`}
-    </div>
-    ${cand ? `<div class="flex justify-between text-[11px] mono bg-[#0b0d11] px-2.5 py-1.5 rounded border border-[#242936]">
-      <span>G: <strong class="text-blue-400">${cand.g_orig.toFixed(3)}</strong></span>
-      <span>σ²: <strong class="text-teal-400">${cand.sigma2.toFixed(4)}</strong></span>
-      <span>Score v: <strong class="text-white">${cand.score.toFixed(3)}</strong></span>
-    </div>` : ""}`;
+  box.innerHTML = placed
+    ? `<div class="flex items-center justify-between">
+        <span class="mono font-semibold text-[#1d1b18]">Job #${d.focal_job_id} (${d.focal_gpus}G)</span>
+        <span class="tag tag-sage mono">→ C${placed.cluster_id} · S${placed.server_id}</span>
+      </div>`
+    : `<div class="flex items-center justify-between">
+        <span class="mono font-semibold text-[#1d1b18]">Job #${d.focal_job_id} (${d.focal_gpus}G)</span>
+        <span class="tag tag-ochre">Waiting for free node</span>
+      </div>`;
 }
 
 function renderLiveChart() {
   const tl = SNAPSHOT?.timeline || [];
-  // Show the most recent ~90 points so the live curve streams naturally
-  const recent = tl.slice(-90);
+  const recent = tl.slice(-80);
   const labels = recent.map(p => `${Math.round(p.t)}s`);
   const utils = recent.map(p => p.util);
-  const qlens = recent.map(p => p.queue_len);
 
   if (!CHARTS.live) {
     CHARTS.live = new Chart(document.getElementById("chart-live-telemetry"), {
@@ -666,51 +639,25 @@ function renderLiveChart() {
       data: {
         labels,
         datasets: [
-          { label: "GPU Util (%)", data: utils, borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.12)", fill: true, tension: 0.25, pointRadius: 0, borderWidth: 2, yAxisID: "y" },
-          { label: "Waiting Queue", data: qlens, borderColor: "#f59e0b", tension: 0.25, pointRadius: 0, borderWidth: 1.8, yAxisID: "y1" },
+          { label: "Util %", data: utils, borderColor: "#b8532f", backgroundColor: "rgba(184,83,47,0.12)", fill: true, tension: 0.25, pointRadius: 0, borderWidth: 2 },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        plugins: { legend: { labels: { color: "#94a0b2", boxWidth: 10, font: { size: 11 } } } },
+        plugins: { legend: { display: false } },
         scales: {
-          x: { ticks: { color: "#647084", maxTicksLimit: 6, font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-          y: { position: "left", min: 0, max: 100, ticks: { color: "#60a5fa", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.05)" } },
-          y1: { position: "right", min: 0, ticks: { color: "#fbbf24", font: { size: 10 } }, grid: { drawOnChartArea: false } },
+          x: { ticks: { color: "#847d72", maxTicksLimit: 5, font: { size: 10 } }, grid: { display: false } },
+          y: { min: 0, max: 100, ticks: { color: "#847d72", font: { size: 10 } }, grid: { color: "rgba(29,27,24,0.06)" } },
         },
       },
     });
   } else {
     CHARTS.live.data.labels = labels;
     CHARTS.live.data.datasets[0].data = utils;
-    CHARTS.live.data.datasets[1].data = qlens;
     CHARTS.live.update("none");
   }
-}
-
-function renderEventTicker() {
-  const evs = SNAPSHOT?.recent_events || [];
-  const n1 = SNAPSHOT?.n1_log || [];
-  document.getElementById("n1-event-count").textContent = n1.length ? `${n1.length} N1 guards` : "";
-  const box = document.getElementById("event-ticker");
-  if (!evs.length) {
-    box.innerHTML = `<div class="text-slate-500 py-4 text-center">No events yet.</div>`;
-    return;
-  }
-  box.innerHTML = evs.slice(0, 6).map(ev => {
-    const cls = ev.event === "start" ? "tag-blue" : ev.event === "finish" ? "tag-teal" : "tag-dim";
-    const info = ev.placement ? `C${ev.placement[0]}·S${ev.placement[1]}` : "";
-    return `<div class="flex items-center justify-between py-1 border-b border-white/5">
-      <div class="flex items-center gap-1.5">
-        <span class="tag ${cls}">${ev.event.toUpperCase()}</span>
-        <span class="mono text-white">#${ev.job_id}</span>
-        <span class="mono text-slate-400">${ev.gpus}G</span>
-      </div>
-      <span class="mono text-[11px] text-slate-400">${info} · ${ev.time}s</span>
-    </div>`;
-  }).join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -756,13 +703,13 @@ function renderComparison(data) {
     <thead><tr><th>Policy</th><th>Avg Wait (s)</th><th>P99 Wait (s)</th><th>8-GPU Wait</th><th>Starved (&gt;3×)</th><th>GPU Util</th><th>LB σ²</th><th>Done</th></tr></thead>
     <tbody>
       ${rows.map(r => `<tr>
-        <td class="mono font-semibold text-white">${r.id}</td>
-        <td class="mono ${r.avg_wait === bestW ? "text-teal-400 font-bold" : ""}">${r.avg_wait.toLocaleString()}</td>
+        <td class="mono font-bold text-[#1d1b18]">${r.id}</td>
+        <td class="mono ${r.avg_wait === bestW ? "text-[#2c6e49] font-bold" : ""}">${r.avg_wait.toLocaleString()}</td>
         <td class="mono">${r.p99_wait.toLocaleString()}</td>
         <td class="mono">${r.avg_wait_8gpu.toLocaleString()}</td>
         <td class="mono">${r.starved_3x}</td>
         <td class="mono">${r.gpu_utilization.toFixed(2)}%</td>
-        <td class="mono ${r.avg_lb_index === bestLB ? "text-blue-400 font-bold" : ""}">${r.avg_lb_index.toFixed(5)}</td>
+        <td class="mono ${r.avg_lb_index === bestLB ? "text-[#b8532f] font-bold" : ""}">${r.avg_lb_index.toFixed(5)}</td>
         <td class="mono">${r.jobs_completed}</td>
       </tr>`).join("")}
     </tbody>
@@ -772,10 +719,10 @@ function renderComparison(data) {
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: "#94a0b2", font: { size: 11 } } } },
+    plugins: { legend: { labels: { color: "#5c574e", font: { size: 11 } } } },
     scales: {
-      x: { ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-      y: { ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.06)" } },
+      x: { ticks: { color: "#5c574e", font: { size: 11 } }, grid: { display: false } },
+      y: { ticks: { color: "#5c574e", font: { size: 11 } }, grid: { color: "rgba(29,27,24,0.06)" } },
     },
   };
 
@@ -784,8 +731,8 @@ function renderComparison(data) {
     data: {
       labels: rows.map(r => r.id),
       datasets: [
-        { label: "Avg Wait (s)", data: rows.map(r => r.avg_wait), backgroundColor: "#3b82f6", borderRadius: 4 },
-        { label: "P99 Wait (s)", data: rows.map(r => r.p99_wait), backgroundColor: "#8b5cf6", borderRadius: 4 },
+        { label: "Avg Wait (s)", data: rows.map(r => r.avg_wait), backgroundColor: "#b8532f", borderRadius: 4 },
+        { label: "P99 Wait (s)", data: rows.map(r => r.p99_wait), backgroundColor: "#475569", borderRadius: 4 },
       ],
     },
     options: opts,
@@ -798,7 +745,7 @@ function renderComparison(data) {
       datasets: ["1", "2", "4", "8"].map((sz, i) => ({
         label: `${sz}-GPU`,
         data: rows.map(r => r.avg_wait_by_gpus[sz] || 0),
-        backgroundColor: PALETTE[i],
+        backgroundColor: CHART_PALETTE[i],
         borderRadius: 4,
       })),
     },
@@ -817,7 +764,7 @@ function exportComparisonCSV() {
 }
 
 // ---------------------------------------------------------------------------
-// TAB 3: Fairness & Heterogeneity
+// TAB 3: Fairness & Mixed-GPU
 // ---------------------------------------------------------------------------
 async function runN2Inspector() {
   const data = await apiPost("/api/experiments/inspect_n2", {
@@ -832,17 +779,17 @@ async function runN2Inspector() {
 
   const eg = data.empty_gradients;
   document.getElementById("n2-gradient-cards").innerHTML = `
-    <div class="bg-[#0b0d11] border border-[#242936] rounded-lg p-3 text-xs mono space-y-1">
-      <div class="font-semibold text-slate-200 font-sans mb-1">4-GPU Server Gradient</div>
-      <div class="flex justify-between"><span class="text-slate-400">Original G:</span><span class="text-blue-400">${eg.server_4g.G_orig}</span></div>
-      <div class="flex justify-between"><span class="text-slate-400">F_C (Truncated):</span><span class="text-amber-400">${eg.server_4g.G_fc}</span></div>
-      <div class="flex justify-between"><span class="text-slate-400">F_C (Renormed):</span><span class="text-purple-400">${eg.server_4g.G_fc_norm}</span></div>
+    <div class="bg-[#fffdf9] border border-[#d5cfc2] rounded-lg p-3 text-xs mono space-y-1">
+      <div class="font-bold text-[#1d1b18] font-sans mb-1">4-GPU Server Gradient</div>
+      <div class="flex justify-between"><span class="text-[#5c574e]">Original G:</span><span class="text-[#b8532f] font-semibold">${eg.server_4g.G_orig}</span></div>
+      <div class="flex justify-between"><span class="text-[#5c574e]">F_C (Truncated):</span><span class="text-[#b77213] font-semibold">${eg.server_4g.G_fc}</span></div>
+      <div class="flex justify-between"><span class="text-[#5c574e]">F_C (Renormed):</span><span class="text-[#2c6e49] font-semibold">${eg.server_4g.G_fc_norm}</span></div>
     </div>
-    <div class="bg-[#0b0d11] border border-[#242936] rounded-lg p-3 text-xs mono space-y-1">
-      <div class="font-semibold text-slate-200 font-sans mb-1">8-GPU Server Gradient</div>
-      <div class="flex justify-between"><span class="text-slate-400">Original G:</span><span class="text-blue-400">${eg.server_8g.G_orig}</span></div>
-      <div class="flex justify-between"><span class="text-slate-400">F_C (Truncated):</span><span class="text-amber-400">${eg.server_8g.G_fc}</span></div>
-      <div class="flex justify-between"><span class="text-slate-400">F_C (Renormed):</span><span class="text-purple-400">${eg.server_8g.G_fc_norm}</span></div>
+    <div class="bg-[#fffdf9] border border-[#d5cfc2] rounded-lg p-3 text-xs mono space-y-1">
+      <div class="font-bold text-[#1d1b18] font-sans mb-1">8-GPU Server Gradient</div>
+      <div class="flex justify-between"><span class="text-[#5c574e]">Original G:</span><span class="text-[#b8532f] font-semibold">${eg.server_8g.G_orig}</span></div>
+      <div class="flex justify-between"><span class="text-[#5c574e]">F_C (Truncated):</span><span class="text-[#b77213] font-semibold">${eg.server_8g.G_fc}</span></div>
+      <div class="flex justify-between"><span class="text-[#5c574e]">F_C (Renormed):</span><span class="text-[#2c6e49] font-semibold">${eg.server_8g.G_fc_norm}</span></div>
     </div>`;
 
   if (CHARTS.n2) CHARTS.n2.destroy();
@@ -852,18 +799,18 @@ async function runN2Inspector() {
     data: {
       labels: t4.map(r => `${r.free} free`),
       datasets: [
-        { label: "Original F(r)", data: t4.map(r => r.F_orig), borderColor: "#3b82f6", borderWidth: 2, tension: 0.2 },
-        { label: "F_C(r) [4G]", data: t4.map(r => r.F_C), borderColor: "#f59e0b", borderWidth: 2, tension: 0.2 },
-        { label: "F_C Norm(r) [4G]", data: t4.map(r => r.F_C_norm), borderColor: "#8b5cf6", borderWidth: 2, tension: 0.2 },
+        { label: "Original F(r)", data: t4.map(r => r.F_orig), borderColor: "#b8532f", borderWidth: 2, tension: 0.2 },
+        { label: "F_C(r) [4G]", data: t4.map(r => r.F_C), borderColor: "#b77213", borderWidth: 2, tension: 0.2 },
+        { label: "F_C Norm(r) [4G]", data: t4.map(r => r.F_C_norm), borderColor: "#2c6e49", borderWidth: 2, tension: 0.2 },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: "#94a0b2", font: { size: 11 } } } },
+      plugins: { legend: { labels: { color: "#5c574e", font: { size: 11 } } } },
       scales: {
-        x: { ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-        y: { min: 0, ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.06)" } },
+        x: { ticks: { color: "#5c574e", font: { size: 11 } }, grid: { display: false } },
+        y: { min: 0, ticks: { color: "#5c574e", font: { size: 11 } }, grid: { color: "rgba(29,27,24,0.06)" } },
       },
     },
   });
@@ -883,10 +830,10 @@ function showSavedStudy(kind) {
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: "#94a0b2", font: { size: 11 } } } },
+    plugins: { legend: { labels: { color: "#5c574e", font: { size: 11 } } } },
     scales: {
-      x: { ticks: { color: "#94a0b2", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-      y: { ticks: { color: "#94a0b2", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.06)" } },
+      x: { ticks: { color: "#5c574e", font: { size: 10 } }, grid: { display: false } },
+      y: { ticks: { color: "#5c574e", font: { size: 10 } }, grid: { color: "rgba(29,27,24,0.06)" } },
     },
   };
 
@@ -905,12 +852,12 @@ function showSavedStudy(kind) {
       type: "bar",
       data: {
         labels: items.map(x => x.label),
-        datasets: [{ label: "Avg Wait (s) — Venus η=15", data: items.map(x => x.val), backgroundColor: ["#3b82f6", "#14b8a6", "#f59e0b", "#8b5cf6", "#ef4444"], borderRadius: 4 }],
+        datasets: [{ label: "Avg Wait (s) — Venus η=15", data: items.map(x => x.val), backgroundColor: ["#2c6e49", "#475569", "#b77213", "#b8532f", "#991b1b"], borderRadius: 4 }],
       },
       options: opts,
     });
     tblEl.innerHTML = `<table class="tbl"><thead><tr><th>Configuration</th><th>Avg Wait</th><th>P99 Wait</th></tr></thead><tbody>
-      ${items.map(x => `<tr><td class="mono text-white">${x.label}</td><td class="mono">${Math.round(x.val).toLocaleString()}s</td><td class="mono">${Math.round(x.p99).toLocaleString()}s</td></tr>`).join("")}
+      ${items.map(x => `<tr><td class="mono font-semibold text-[#1d1b18]">${x.label}</td><td class="mono">${Math.round(x.val).toLocaleString()}s</td><td class="mono">${Math.round(x.p99).toLocaleString()}s</td></tr>`).join("")}
     </tbody></table>`;
   } else if (kind === "e4" && SAVED_RESEARCH.e4) {
     const rows = SAVED_RESEARCH.e4.filter(r => r.trace === "venus" && r.eta === 15).slice(0, 7);
@@ -919,14 +866,14 @@ function showSavedStudy(kind) {
       data: {
         labels: rows.map(r => r.label),
         datasets: [
-          { label: "Avg Wait", data: rows.map(r => r.avg_wait), backgroundColor: "#3b82f6", borderRadius: 4 },
-          { label: "P99 Wait", data: rows.map(r => r.p99_wait), backgroundColor: "#f59e0b", borderRadius: 4 },
+          { label: "Avg Wait", data: rows.map(r => r.avg_wait), backgroundColor: "#2c6e49", borderRadius: 4 },
+          { label: "P99 Wait", data: rows.map(r => r.p99_wait), backgroundColor: "#b8532f", borderRadius: 4 },
         ],
       },
       options: opts,
     });
     tblEl.innerHTML = `<table class="tbl"><thead><tr><th>Policy</th><th>Avg Wait</th><th>P99 Wait</th><th>Starved (&gt;3×)</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td class="mono text-white">${r.label}</td><td class="mono">${Math.round(r.avg_wait).toLocaleString()}s</td><td class="mono">${Math.round(r.p99_wait).toLocaleString()}s</td><td class="mono">${r.starved_3x}</td></tr>`).join("")}
+      ${rows.map(r => `<tr><td class="mono font-semibold text-[#1d1b18]">${r.label}</td><td class="mono">${Math.round(r.avg_wait).toLocaleString()}s</td><td class="mono">${Math.round(r.p99_wait).toLocaleString()}s</td><td class="mono">${r.starved_3x}</td></tr>`).join("")}
     </tbody></table>`;
   } else if (kind === "e7" && SAVED_RESEARCH.e7_norm) {
     const normRows = SAVED_RESEARCH.e7_norm.filter(r => r.kwargs?.window === "dynamic");
@@ -937,8 +884,8 @@ function showSavedStudy(kind) {
       data: {
         labels: raw.map(r => `w=${r.kwargs?.w}`),
         datasets: [
-          { label: "Raw Score", data: raw.map(r => r.avg_wait), borderColor: "#3b82f6", borderWidth: 2 },
-          { label: "Normalised Score", data: norm.map(r => r.avg_wait), borderColor: "#8b5cf6", borderWidth: 2 },
+          { label: "Raw Score", data: raw.map(r => r.avg_wait), borderColor: "#b8532f", borderWidth: 2 },
+          { label: "Normalised Score", data: norm.map(r => r.avg_wait), borderColor: "#2c6e49", borderWidth: 2 },
         ],
       },
       options: opts,
