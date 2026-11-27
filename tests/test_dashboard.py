@@ -97,7 +97,7 @@ def test_dashboard_frontend_has_no_internal_labels():
     static_dir = Path(__file__).resolve().parent.parent / "dashboard" / "static"
     index_html = (static_dir / "index.html").read_text(encoding="utf-8")
     app_js = (static_dir / "app.js").read_text(encoding="utf-8")
-    assert "MCG-Sched Control Plane" in index_html
+    assert "MCG-Sched" in index_html
     assert "Person 5" not in index_html
     assert "Person 5" not in app_js
 

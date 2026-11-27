@@ -400,11 +400,25 @@ class SimulationSession:
         self.done = False
         self.recent_events: List[Dict[str, Any]] = []
         self.last_decision: Optional[Dict[str, Any]] = None
+        self.step_started: List[Dict[str, Any]] = []
+        self.step_finished: List[Dict[str, Any]] = []
 
         proxy = ObservedScheduler(inner_sched, self)
         self.sim = Simulator(jobs, state, proxy, listener=self._on_event)
 
     def _on_event(self, event: str, sim: Simulator, job: Job) -> None:
+        if event == "start" and self.capture_details:
+            self.step_started.append({
+                "job_id": job.job_id,
+                "gpus": job.gpus,
+                "placement": list(job.placement) if job.placement else None,
+            })
+        elif event == "finish" and self.capture_details:
+            self.step_finished.append({
+                "job_id": job.job_id,
+                "gpus": job.gpus,
+                "placement": list(job.placement) if job.placement else None,
+            })
         if not self.capture_details and event in ("arrival", "finish"):
             return
         entry = {
@@ -535,6 +549,8 @@ class SimulationSession:
         if self.done:
             return self.snapshot()
         count = max(1, int(count))
+        self.step_started = []
+        self.step_finished = []
         # Capture detailed round snapshots only on the final step of a batch
         for i in range(count):
             self.capture_details = (i == count - 1)
@@ -593,16 +609,28 @@ class SimulationSession:
             servers_data = []
             for s in c.servers:
                 res_job = reserved_by_server.get(s.key)
+                run_list = []
+                max_prog = 0.0
+                for jid, g in s.running.items():
+                    jobj = sim.running.get(jid)
+                    dur = jobj.duration if jobj and jobj.duration > 0 else 1.0
+                    elapsed = max(0.0, sim.now - (jobj.start_time or sim.now)) if jobj else 0.0
+                    prog = min(100.0, (elapsed / dur) * 100.0)
+                    max_prog = max(max_prog, prog)
+                    run_list.append({
+                        "job_id": jid,
+                        "gpus": g,
+                        "progress_pct": round(prog, 1),
+                        "remaining": round(max(0.0, dur - elapsed), 1),
+                    })
                 servers_data.append({
                     "server_id": s.server_id,
                     "capacity": s.capacity,
                     "free": s.free,
                     "used": s.capacity - s.free,
                     "reserved_for": res_job,
-                    "running": [
-                        {"job_id": jid, "gpus": g}
-                        for jid, g in s.running.items()
-                    ],
+                    "max_progress_pct": round(max_prog, 1),
+                    "running": run_list,
                 })
             clusters_data.append({
                 "cluster_id": c.cluster_id,
@@ -713,6 +741,8 @@ class SimulationSession:
             "reserved_servers": {str(k): list(v) for k, v in reserved_by_job.items()},
             "n1_log": n1_log,
             "recent_events": list(reversed(self.recent_events[-25:])),
+            "step_started": list(self.step_started),
+            "step_finished": list(self.step_finished),
             "last_decision": self.last_decision,
             "summary": summary,
         }

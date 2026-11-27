@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MCG-Sched Control Plane — Multi-Cluster GPU Scheduler</title>
+  <title>MCG-Sched — Multi-Cluster GPU Scheduler</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -14,545 +14,372 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-  <!-- TOP NAVIGATION BAR -->
-  <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-[#070b14]/90 backdrop-blur-md">
-    <div class="max-w-[1680px] mx-auto px-5 h-15 py-2.5 flex flex-wrap items-center justify-between gap-4">
-      <!-- Brand -->
+  <!-- TOP BAR -->
+  <header class="sticky top-0 z-30 border-b border-[#252a36] bg-[#0b0d11]/95 backdrop-blur-sm">
+    <div class="max-w-[1560px] mx-auto px-5 py-2.5 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
-          <i data-lucide="cpu" class="w-5 h-5 text-white"></i>
+        <div class="w-8 h-8 rounded-lg bg-[#181c25] border border-[#363e50] flex items-center justify-center">
+          <i data-lucide="cpu" class="w-4 h-4 text-blue-400"></i>
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="text-base font-bold tracking-tight text-slate-100">MCG-Sched Control Plane</h1>
-            <span class="badge badge-cyan">IEEE TPDS 2025 + Extensions</span>
+            <span class="text-sm font-semibold tracking-tight text-white">MCG-Sched</span>
+            <span class="text-[11px] text-slate-500 font-medium">Multi-Cluster GPU Resource Simulator</span>
           </div>
-          <p class="text-[11px] text-slate-400">Multi-Cluster GPU Resource Management · Discrete-Event Simulator</p>
         </div>
       </div>
 
-      <!-- Primary Tabs -->
-      <nav class="flex items-center gap-1.5 bg-[#0e1525] p-1 rounded-xl border border-slate-800">
-        <button class="nav-tab active" data-tab="live" onclick="switchTab('live')">
-          <i data-lucide="activity" class="w-4 h-4"></i> Live Simulator
+      <nav class="flex items-center gap-1 bg-[#12151c] p-1 rounded-lg border border-[#252a36]">
+        <button class="top-tab active" data-tab="live" onclick="switchTab('live')">
+          <i data-lucide="play-circle" class="w-3.5 h-3.5"></i> Live Simulator
         </button>
-        <button class="nav-tab" data-tab="compare" onclick="switchTab('compare')">
-          <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Benchmark Arena
+        <button class="top-tab" data-tab="compare" onclick="switchTab('compare')">
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> Compare Policies
         </button>
-        <button class="nav-tab" data-tab="lab" onclick="switchTab('lab')">
-          <i data-lucide="sliders" class="w-4 h-4"></i> Fairness &amp; Heterogeneity Lab
-        </button>
-        <button class="nav-tab" data-tab="research" onclick="switchTab('research')">
-          <i data-lucide="flask-conical" class="w-4 h-4"></i> Research Results
+        <button class="top-tab" data-tab="research" onclick="switchTab('research')">
+          <i data-lucide="layers" class="w-3.5 h-3.5"></i> Fairness &amp; Heterogeneity
         </button>
       </nav>
 
-      <!-- Live Status Pill -->
-      <div class="flex items-center gap-3">
-        <div id="global-status-pill" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#0e1525] border border-slate-800 text-xs">
-          <span id="status-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span id="status-text" class="text-slate-300 font-medium">Ready</span>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#12151c] border border-[#252a36]">
+          <span id="status-dot" class="w-2 h-2 rounded-full bg-teal-400"></span>
+          <span id="status-text" class="text-slate-300">Ready</span>
           <span class="text-slate-600">|</span>
-          <span id="header-clock" class="mono text-sky-400 font-semibold">t = 0 s</span>
+          <span id="header-clock" class="mono text-blue-400 font-medium">t = 0 s</span>
         </div>
       </div>
     </div>
   </header>
 
-  <!-- MAIN CONTAINER -->
-  <main class="flex-1 max-w-[1680px] w-full mx-auto px-5 py-4">
+  <main class="flex-1 max-w-[1560px] w-full mx-auto px-5 py-4 space-y-4">
 
-    <!-- ========================================================= -->
-    <!-- TAB 1: LIVE SIMULATOR                                     -->
-    <!-- ========================================================= -->
-    <section id="tab-live" class="tab-view grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+    <!-- =========================================================== -->
+    <!-- TAB 1: LIVE ANIMATED SIMULATOR                              -->
+    <!-- =========================================================== -->
+    <section id="tab-live" class="tab-view space-y-3.5">
 
-      <!-- LEFT CONFIGURATION RAIL -->
-      <aside class="xl:col-span-3 space-y-3.5 xl:sticky xl:top-20">
-
-        <!-- Quick Demo Presets -->
-        <div class="panel p-3.5">
-          <div class="flex items-center justify-between mb-2.5">
-            <span class="ctrl-label !mb-0">Quick Demo Scenarios</span>
-            <span class="text-[10px] text-slate-500">1-click load</span>
-          </div>
-          <div class="grid grid-cols-2 gap-1.5">
-            <button class="preset-pill" onclick="applyPreset('burst')">
-              <div class="font-semibold text-sky-300">⚡ Burst Load</div>
-              <div class="text-[10px] text-slate-400">800 jobs @ t=0</div>
-            </button>
-            <button class="preset-pill" onclick="applyPreset('fairness')">
-              <div class="font-semibold text-amber-300">🛡️ Drain Reserve</div>
-              <div class="text-[10px] text-slate-400">MCG-Fair (N1)</div>
-            </button>
-            <button class="preset-pill" onclick="applyPreset('mixed')">
-              <div class="font-semibold text-purple-300">🔀 Mixed 4+8G</div>
-              <div class="text-[10px] text-slate-400">Heterogeneous (N2)</div>
-            </button>
-            <button class="preset-pill" onclick="applyPreset('philly')">
-              <div class="font-semibold text-emerald-300">📊 Philly Trace</div>
-              <div class="text-[10px] text-slate-400">500 jobs, η=4</div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Workload & Topology Config -->
-        <div class="panel p-3.5 space-y-3">
-          <div class="flex items-center gap-2 text-xs font-semibold text-slate-200 border-b border-slate-800 pb-2">
-            <i data-lucide="database" class="w-3.5 h-3.5 text-sky-400"></i>
-            Workload &amp; Cluster Setup
-          </div>
-
-          <div class="grid grid-cols-2 gap-2.5">
-            <div class="col-span-2">
-              <label class="ctrl-label">Workload Trace</label>
-              <select id="live-trace" class="ctrl-select"></select>
+      <!-- CLEAN HORIZONTAL CONTROL TOOLBAR -->
+      <div class="card p-3">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div class="flex flex-wrap items-end gap-3">
+            <div>
+              <label class="field-lbl">Scenario</label>
+              <select id="live-scenario" class="sel w-48" onchange="onScenarioChange()">
+                <option value="venus_std">Venus Trace (Real Workload)</option>
+                <option value="burst_800">800-Job Burst Stress Test</option>
+                <option value="fairness_n1">Fairness &amp; Drain Reserve (N1)</option>
+                <option value="mixed_n2">Mixed 4+8-GPU Cluster (N2)</option>
+                <option value="philly_std">Philly Trace (Microsoft)</option>
+              </select>
             </div>
             <div>
-              <label class="ctrl-label">Job Slice (0=all)</label>
-              <input id="live-njobs" type="number" min="0" max="10000" step="50" value="400" class="ctrl-input mono" />
+              <label class="field-lbl">Scheduling Policy</label>
+              <select id="live-sched" class="sel w-56" onchange="onPolicyChange()"></select>
             </div>
             <div>
-              <label class="ctrl-label">Seed</label>
-              <input id="live-seed" type="number" min="0" max="999" value="0" class="ctrl-input mono" />
+              <label class="field-lbl">Topology</label>
+              <select id="live-topo" class="sel w-52" onchange="initSimulation()"></select>
             </div>
-          </div>
-
-          <div>
-            <div class="flex justify-between items-center mb-1">
-              <label class="ctrl-label !mb-0">Arrival Compression (η)</label>
-              <span id="live-eta-val" class="mono text-xs text-sky-400 font-semibold">10.0×</span>
-            </div>
-            <input id="live-eta" type="range" min="1" max="20" step="0.5" value="10" class="w-full accent-sky-400 cursor-pointer"
-              oninput="document.getElementById('live-eta-val').textContent = parseFloat(this.value).toFixed(1) + '×'" />
-          </div>
-
-          <label class="flex items-center justify-between cursor-pointer py-1 px-2.5 rounded-lg bg-[#0b1120] border border-slate-800/80">
-            <span class="text-xs text-slate-300 font-medium">Burst Mode (All arrive at t = 0)</span>
-            <input id="live-burst" type="checkbox" class="accent-sky-400 w-4 h-4" />
-          </label>
-
-          <div>
-            <label class="ctrl-label">Cluster Topology</label>
-            <select id="live-topo" class="ctrl-select" onchange="updateTopologyBadge()"></select>
-            <div id="live-topo-info" class="mt-1.5 text-[11px] text-slate-400 flex flex-wrap gap-1.5"></div>
-          </div>
-        </div>
-
-        <!-- Scheduler & Hyperparameters -->
-        <div class="panel p-3.5 space-y-3">
-          <div class="flex items-center gap-2 text-xs font-semibold text-slate-200 border-b border-slate-800 pb-2">
-            <i data-lucide="git-branch" class="w-3.5 h-3.5 text-indigo-400"></i>
-            Scheduling Policy
-          </div>
-
-          <div>
-            <label class="ctrl-label">Algorithm</label>
-            <select id="live-sched" class="ctrl-select" onchange="updateSchedulerMeta()"></select>
-            <p id="live-sched-desc" class="mt-1.5 text-[11px] leading-relaxed text-slate-400 bg-[#0b1120] p-2 rounded-lg border border-slate-800/80"></p>
-          </div>
-
-          <!-- Dynamic Policy Parameters -->
-          <div id="live-params-box" class="grid grid-cols-2 gap-2 pt-1"></div>
-        </div>
-
-        <!-- Playback Controls -->
-        <div class="panel p-3.5 space-y-3">
-          <div class="flex items-center justify-between">
-            <span class="ctrl-label !mb-0">Simulation Controls</span>
-            <span id="sim-progress-pct" class="mono text-xs text-emerald-400 font-semibold">0%</span>
-          </div>
-
-          <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800">
-            <div id="sim-progress-bar" class="bg-gradient-to-r from-sky-400 to-emerald-400 h-full transition-all duration-200" style="width: 0%"></div>
-          </div>
-
-          <button id="btn-init" class="btn btn-primary w-full" onclick="initSimulation()">
-            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Initialize / Reset Simulation
-          </button>
-
-          <div class="grid grid-cols-3 gap-1.5">
-            <button id="btn-step1" class="btn" onclick="stepSimulation(1)">
-              <i data-lucide="step-forward" class="w-3.5 h-3.5"></i> +1
+            <button class="btn" onclick="toggleAdvancedDrawer()">
+              <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i> Tune
             </button>
-            <button id="btn-step10" class="btn" onclick="stepSimulation(10)">
-              <i data-lucide="fast-forward" class="w-3.5 h-3.5"></i> +10
-            </button>
-            <button id="btn-play" class="btn btn-emerald" onclick="togglePlay()">
+          </div>
+
+          <!-- Playback Controls -->
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btn-play" class="btn btn-blue min-w-[92px]" onclick="togglePlay()">
               <i data-lucide="play" class="w-3.5 h-3.5"></i> Play
             </button>
-          </div>
-
-          <div class="grid grid-cols-2 gap-1.5 items-center">
-            <select id="play-speed" class="ctrl-select !py-1.5 text-xs">
-              <option value="600">Speed: Slow (1x)</option>
-              <option value="220" selected>Speed: Normal (3x)</option>
-              <option value="60">Speed: Fast (10x)</option>
+            <button id="btn-step1" class="btn" onclick="stepSimulation(1)" title="Advance 1 event timestamp">
+              <i data-lucide="step-forward" class="w-3.5 h-3.5"></i> Step
+            </button>
+            <button id="btn-step10" class="btn" onclick="stepSimulation(10)" title="Advance 10 event timestamps">
+              +10
+            </button>
+            <select id="play-speed" class="sel w-24">
+              <option value="520">1x Slow</option>
+              <option value="200" selected>3x Normal</option>
+              <option value="65">10x Fast</option>
             </select>
-            <button id="btn-run-end" class="btn btn-amber" onclick="runToEnd()">
-              <i data-lucide="chevrons-right" class="w-3.5 h-3.5"></i> Run All
+            <button id="btn-run-end" class="btn btn-teal" onclick="runToEnd()">
+              Finish
+            </button>
+            <button class="btn" onclick="initSimulation()" title="Reset simulation">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
             </button>
           </div>
         </div>
-      </aside>
 
-      <!-- MAIN TELEMETRY WORKSPACE -->
-      <div class="xl:col-span-9 space-y-4">
-
-        <!-- 6 KPI CARDS -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div class="kpi-card">
-            <div class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Jobs Progress</div>
-            <div class="mt-1 flex items-baseline gap-1.5">
-              <span id="kpi-done" class="text-xl font-bold mono text-white">0</span>
-              <span id="kpi-total" class="text-xs mono text-slate-400">/ 0</span>
-            </div>
-            <div id="kpi-job-sub" class="mt-1 text-[11px] text-slate-400 mono">run 0 · wait 0</div>
+        <!-- Collapsible Tuning Drawer -->
+        <div id="advanced-drawer" class="hidden mt-3 pt-3 border-t border-[#252a36] flex flex-wrap items-end gap-4">
+          <div>
+            <label class="field-lbl">Trace Source</label>
+            <select id="live-trace" class="sel w-40"></select>
           </div>
-
-          <div class="kpi-card">
-            <div class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">GPU Utilization</div>
-            <div class="mt-1 flex items-baseline gap-1.5">
-              <span id="kpi-util" class="text-xl font-bold mono text-sky-400">0.0%</span>
-            </div>
-            <div id="kpi-gpus-sub" class="mt-1 text-[11px] text-slate-400 mono">0 / 0 GPUs</div>
+          <div>
+            <label class="field-lbl">Jobs Slice</label>
+            <input id="live-njobs" type="number" min="20" max="7000" step="50" value="400" class="inp mono w-24" />
           </div>
-
-          <div class="kpi-card">
-            <div class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Avg / P99 Wait</div>
-            <div class="mt-1 flex items-baseline gap-1.5">
-              <span id="kpi-avg-wait" class="text-xl font-bold mono text-emerald-400">0s</span>
-            </div>
-            <div id="kpi-p99-wait" class="mt-1 text-[11px] text-slate-400 mono">P99: 0s</div>
+          <div>
+            <label class="field-lbl">Arrival η</label>
+            <input id="live-eta" type="number" min="1" max="30" step="1" value="10" class="inp mono w-20" />
           </div>
-
-          <div class="kpi-card">
-            <div class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Load Balance σ²</div>
-            <div class="mt-1 flex items-baseline gap-1.5">
-              <span id="kpi-lb" class="text-xl font-bold mono text-indigo-400">0.0000</span>
-            </div>
-            <div class="mt-1 text-[11px] text-slate-400">Cluster variance</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Stranded GPUs</div>
-            <div class="mt-1 flex items-baseline gap-1.5">
-              <span id="kpi-stranded" class="text-xl font-bold mono text-rose-400">0</span>
-            </div>
-            <div id="kpi-free-sub" class="mt-1 text-[11px] text-slate-400 mono">0 free GPUs</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Fairness Guard (N1)</div>
-            <div class="mt-1 flex items-baseline gap-2">
-              <span id="kpi-protected" class="text-xl font-bold mono text-amber-400">0</span>
-              <span class="text-[11px] text-slate-400">protected</span>
-            </div>
-            <div id="kpi-reserved-sub" class="mt-1 text-[11px] text-slate-400 mono">0 reserved · 0 starved</div>
-          </div>
+          <label class="flex items-center gap-2 py-1.5 px-2.5 rounded-md bg-[#0b0d11] border border-[#252a36] cursor-pointer text-xs text-slate-300">
+            <input id="live-burst" type="checkbox" class="accent-blue-500" /> Burst (t=0)
+          </label>
+          <div id="live-params-box" class="flex flex-wrap items-end gap-3"></div>
+          <button class="btn btn-blue" onclick="initSimulation()">Apply &amp; Restart</button>
         </div>
-
-        <!-- MIDDLE ROW: CLUSTER GPU MATRIX + LIVE CHARTS -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-
-          <!-- Infrastructure GPU Grid -->
-          <div class="panel lg:col-span-7 flex flex-col">
-            <div class="panel-header flex-wrap gap-2">
-              <div class="flex items-center gap-2">
-                <i data-lucide="server" class="w-4 h-4 text-sky-400"></i>
-                <h2 class="text-sm font-semibold text-slate-100">Cluster Infrastructure Grid</h2>
-                <span id="grid-server-summary" class="badge badge-slate"></span>
-              </div>
-              <div class="flex items-center gap-3 text-[11px] text-slate-300">
-                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-sky-400 inline-block"></span>Running</span>
-                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500/30 border border-emerald-400/60 inline-block"></span>Free</span>
-                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500/30 border-2 border-amber-400 inline-block"></span>Reserved</span>
-                <select id="grid-filter" class="ctrl-select !w-auto !py-1 !px-2 text-[11px]" onchange="renderClusters()">
-                  <option value="all">All Clusters</option>
-                  <option value="active">Active Only</option>
-                  <option value="reserved">Reserved Only</option>
-                </select>
-              </div>
-            </div>
-            <div id="cluster-grid" class="p-3 overflow-y-auto max-h-[430px] min-h-[320px]"></div>
-          </div>
-
-          <!-- Telemetry Charts -->
-          <div class="panel lg:col-span-5 flex flex-col">
-            <div class="panel-header">
-              <div class="flex items-center gap-2">
-                <i data-lucide="line-chart" class="w-4 h-4 text-emerald-400"></i>
-                <h2 class="text-sm font-semibold text-slate-100">Live Cluster Telemetry</h2>
-              </div>
-              <span class="text-[11px] text-slate-400">Real-time event trace</span>
-            </div>
-            <div class="p-3.5 space-y-4 flex-1 flex flex-col justify-between">
-              <div class="h-[175px] relative">
-                <canvas id="chart-util-queue"></canvas>
-              </div>
-              <div class="h-[175px] relative">
-                <canvas id="chart-lb"></canvas>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- BOTTOM ROW: SCHEDULING DECISION INSPECTOR + JOB MONITOR -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-
-          <!-- Live Scheduling Decision Inspector -->
-          <div class="panel lg:col-span-6 flex flex-col">
-            <div class="panel-header flex-wrap gap-2">
-              <div class="flex items-center gap-2">
-                <i data-lucide="cpu" class="w-4 h-4 text-indigo-400"></i>
-                <h2 class="text-sm font-semibold text-slate-100">Scheduling Decision Inspector</h2>
-              </div>
-              <div class="flex items-center gap-1">
-                <button class="sub-tab active" data-sub="scores" onclick="switchInspectorSub('scores')">Candidate Scores</button>
-                <button class="sub-tab" data-sub="window" onclick="switchInspectorSub('window')">Window Order</button>
-                <button class="sub-tab" data-sub="n1log" onclick="switchInspectorSub('n1log')">N1 Guard Log</button>
-              </div>
-            </div>
-
-            <div id="decision-banner" class="px-4 py-2 bg-[#0b1120] border-b border-slate-800/80 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-2">
-              <span>Step the simulator to inspect live <span class="mono text-sky-400">G</span>, <span class="mono text-indigo-400">σ²</span>, and <span class="mono text-emerald-400">v = (1-w)G + wσ²</span> calculations.</span>
-            </div>
-
-            <div class="overflow-auto max-h-[290px] min-h-[220px]">
-              <div id="inspector-scores"></div>
-              <div id="inspector-window" class="hidden"></div>
-              <div id="inspector-n1log" class="hidden"></div>
-            </div>
-          </div>
-
-          <!-- Job Queue & Running Monitor -->
-          <div class="panel lg:col-span-6 flex flex-col">
-            <div class="panel-header flex-wrap gap-2">
-              <div class="flex items-center gap-2">
-                <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i>
-                <h2 class="text-sm font-semibold text-slate-100">Workload Queue &amp; Execution</h2>
-              </div>
-              <div class="flex items-center gap-1">
-                <button class="sub-tab active" data-qsub="waiting" onclick="switchQueueSub('waiting')">Waiting (<span id="qtab-wait-cnt">0</span>)</button>
-                <button class="sub-tab" data-qsub="running" onclick="switchQueueSub('running')">Running (<span id="qtab-run-cnt">0</span>)</button>
-                <button class="sub-tab" data-qsub="events" onclick="switchQueueSub('events')">Event Feed</button>
-              </div>
-            </div>
-            <div class="overflow-auto max-h-[330px] min-h-[220px]">
-              <div id="queue-waiting"></div>
-              <div id="queue-running" class="hidden"></div>
-              <div id="queue-events" class="hidden"></div>
-            </div>
-          </div>
-
-        </div>
-
       </div>
+
+      <!-- 4 CLEAN KPI CARDS -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="card p-3.5">
+          <div class="flex justify-between items-center text-[11px] text-slate-400 font-medium">
+            <span>WORKLOAD PROGRESS</span>
+            <span id="kpi-pct" class="mono text-teal-400 font-semibold">0%</span>
+          </div>
+          <div class="mt-1 flex items-baseline gap-2">
+            <span id="kpi-done" class="text-xl font-semibold mono text-white">0</span>
+            <span id="kpi-total" class="text-xs mono text-slate-500">/ 0 jobs</span>
+          </div>
+          <div class="mt-2 w-full h-1.5 bg-[#0b0d11] rounded-full overflow-hidden">
+            <div id="sim-progress-bar" class="h-full bg-blue-500 transition-all duration-200" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="card p-3.5">
+          <div class="flex justify-between items-center text-[11px] text-slate-400 font-medium">
+            <span>CLUSTER GPU UTILIZATION</span>
+            <span id="kpi-gpus-sub" class="mono text-slate-400">0 / 0 GPUs</span>
+          </div>
+          <div class="mt-1 flex items-baseline gap-2">
+            <span id="kpi-util" class="text-xl font-semibold mono text-blue-400">0.0%</span>
+            <span id="kpi-stranded" class="text-xs mono text-slate-400">· 0 stranded</span>
+          </div>
+          <div class="mt-2 w-full h-1.5 bg-[#0b0d11] rounded-full overflow-hidden">
+            <div id="util-progress-bar" class="h-full bg-teal-400 transition-all duration-200" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="card p-3.5">
+          <div class="flex justify-between items-center text-[11px] text-slate-400 font-medium">
+            <span>QUEUEING DELAY</span>
+            <span id="kpi-wait-cnt" class="mono text-slate-400">0 waiting</span>
+          </div>
+          <div class="mt-1 flex items-baseline gap-2">
+            <span id="kpi-avg-wait" class="text-xl font-semibold mono text-white">0s</span>
+            <span id="kpi-p99-wait" class="text-xs mono text-slate-400">P99: 0s</span>
+          </div>
+          <div id="kpi-running-sub" class="mt-1.5 text-[11px] text-slate-500 mono">0 running jobs</div>
+        </div>
+
+        <div class="card p-3.5">
+          <div class="flex justify-between items-center text-[11px] text-slate-400 font-medium">
+            <span>LOAD BALANCE &amp; GUARD</span>
+            <span id="kpi-res-badge" class="mono text-amber-400">0 reserved</span>
+          </div>
+          <div class="mt-1 flex items-baseline gap-2">
+            <span id="kpi-lb" class="text-xl font-semibold mono text-white">0.0000</span>
+            <span class="text-xs text-slate-500">σ²</span>
+          </div>
+          <div id="kpi-fair-sub" class="mt-1.5 text-[11px] text-slate-500 mono">0 protected · 0 starved</div>
+        </div>
+      </div>
+
+      <!-- HERO ANIMATED SIMULATION STAGE -->
+      <div id="sim-stage" class="relative grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+        <!-- SVG Dispatch Beam Overlay -->
+        <svg id="dispatch-svg"></svg>
+
+        <!-- LEFT: WAITING QUEUE & ACTIVE DECISION -->
+        <div class="lg:col-span-4 flex flex-col gap-3.5">
+          <!-- Queue Lane -->
+          <div class="card flex-1 flex flex-col">
+            <div class="card-head">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-white">Waiting Queue</span>
+                <span id="q-count-pill" class="tag tag-dim mono">0</span>
+              </div>
+              <span class="text-[11px] text-slate-500">Proportional GPU demand</span>
+            </div>
+            <div id="queue-blocks" class="p-2.5 space-y-1.5 overflow-y-auto max-h-[300px] min-h-[220px]"></div>
+          </div>
+
+          <!-- Active Decision Spotlight -->
+          <div class="card">
+            <div class="card-head">
+              <span class="text-xs font-semibold text-white">Latest Scheduler Decision</span>
+              <button class="text-[11px] text-blue-400 hover:underline" onclick="toggleScoreDrawer()">Inspect scores</button>
+            </div>
+            <div id="decision-spotlight" class="p-3 text-xs text-slate-300 space-y-2">
+              <div class="text-slate-500">Press Play or Step to watch live placement decisions.</div>
+            </div>
+            <div id="score-drawer" class="hidden border-t border-[#252a36] max-h-[200px] overflow-auto"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: ANIMATED 15-CLUSTER INFRASTRUCTURE MATRIX -->
+        <div class="lg:col-span-8 card flex flex-col">
+          <div class="card-head flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-white">Cluster GPU Rack Matrix</span>
+              <span id="topo-mix-tag" class="tag tag-dim mono"></span>
+            </div>
+            <div class="flex items-center gap-3 text-[11px] text-slate-400">
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block"></span>Allocated</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#1e293b] border border-[#334155] inline-block"></span>Free</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500/20 border border-amber-400 inline-block"></span>Draining / Reserved</span>
+              <span class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-teal-400 inline-block"></span>Run progress</span>
+            </div>
+          </div>
+          <div id="cluster-rack" class="p-3 space-y-2 overflow-y-auto max-h-[500px] min-h-[380px]"></div>
+        </div>
+      </div>
+
+      <!-- BOTTOM TELEMETRY & LIVE TICKER -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+        <div class="lg:col-span-8 card p-3.5">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-white">Utilization &amp; Queue Trajectory</span>
+            <span class="text-[11px] text-slate-500">Real-time simulation curve</span>
+          </div>
+          <div class="h-[170px]"><canvas id="chart-live-telemetry"></canvas></div>
+        </div>
+        <div class="lg:col-span-4 card flex flex-col">
+          <div class="card-head">
+            <span class="text-xs font-semibold text-white">Live Event Stream</span>
+            <span id="n1-event-count" class="text-[11px] text-amber-400 mono"></span>
+          </div>
+          <div id="event-ticker" class="p-2.5 space-y-1.5 overflow-y-auto max-h-[180px] text-xs"></div>
+        </div>
+      </div>
+
     </section>
 
-    <!-- ========================================================= -->
-    <!-- TAB 2: BENCHMARK ARENA (MULTI-SCHEDULER COMPARISON)       -->
-    <!-- ========================================================= -->
+    <!-- =========================================================== -->
+    <!-- TAB 2: COMPARE POLICIES                                     -->
+    <!-- =========================================================== -->
     <section id="tab-compare" class="tab-view hidden space-y-4">
-      <div class="panel p-4">
-        <div class="flex flex-wrap items-end justify-between gap-4">
-          <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 flex-1 min-w-[300px]">
+      <div class="card p-4 space-y-3">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div class="flex flex-wrap items-end gap-3">
             <div>
-              <label class="ctrl-label">Trace</label>
-              <select id="cmp-trace" class="ctrl-select"></select>
-            </div>
-            <div>
-              <label class="ctrl-label">Topology</label>
-              <select id="cmp-topo" class="ctrl-select"></select>
+              <label class="field-lbl">Workload Trace</label>
+              <select id="cmp-trace" class="sel w-44"></select>
             </div>
             <div>
-              <label class="ctrl-label">Jobs</label>
-              <input id="cmp-njobs" type="number" min="20" max="7000" step="50" value="400" class="ctrl-input mono" />
+              <label class="field-lbl">Topology</label>
+              <select id="cmp-topo" class="sel w-56"></select>
             </div>
             <div>
-              <label class="ctrl-label">η Compression</label>
-              <input id="cmp-eta" type="number" min="1" max="30" step="0.5" value="10" class="ctrl-input mono" />
+              <label class="field-lbl">Jobs</label>
+              <input id="cmp-njobs" type="number" min="20" max="7000" step="50" value="400" class="inp mono w-24" />
             </div>
-            <div class="flex flex-col justify-end">
-              <label class="flex items-center gap-2 cursor-pointer py-2 px-2.5 rounded-lg bg-[#0b1120] border border-slate-800">
-                <input id="cmp-burst" type="checkbox" class="accent-sky-400 w-4 h-4" />
-                <span class="text-xs text-slate-300 font-medium">Burst (t=0)</span>
-              </label>
+            <div>
+              <label class="field-lbl">η</label>
+              <input id="cmp-eta" type="number" min="1" max="30" step="1" value="10" class="inp mono w-20" />
             </div>
+            <label class="flex items-center gap-2 py-1.5 px-2.5 rounded-md bg-[#0b0d11] border border-[#252a36] cursor-pointer text-xs text-slate-300">
+              <input id="cmp-burst" type="checkbox" class="accent-blue-500" /> Burst (t=0)
+            </label>
           </div>
-
-          <div class="flex items-center gap-2">
-            <button class="btn" onclick="exportComparisonCSV()">
-              <i data-lucide="download" class="w-4 h-4"></i> Export CSV
-            </button>
-            <button id="btn-run-cmp" class="btn btn-primary" onclick="runComparisonArena()">
-              <i data-lucide="play" class="w-4 h-4"></i> Run Head-to-Head Benchmark
-            </button>
+          <div class="flex gap-2">
+            <button class="btn" onclick="exportComparisonCSV()">Export CSV</button>
+            <button id="btn-run-cmp" class="btn btn-blue" onclick="runComparisonArena()">Run Comparison</button>
           </div>
         </div>
 
-        <div class="mt-3 pt-3 border-t border-slate-800/80">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span class="ctrl-label !mb-0">Select Policies to Compare</span>
-            <div class="flex gap-2 text-[11px]">
-              <button class="text-sky-400 hover:underline" onclick="selectCompareGroup('core')">Core + Baselines</button>
-              <span class="text-slate-600">·</span>
-              <button class="text-amber-400 hover:underline" onclick="selectCompareGroup('fairness')">Fairness (N1/N4)</button>
-              <span class="text-slate-600">·</span>
-              <button class="text-purple-400 hover:underline" onclick="selectCompareGroup('hetero')">Heterogeneous (N2)</button>
-            </div>
-          </div>
+        <div class="pt-2.5 border-t border-[#252a36] flex flex-wrap items-center gap-2">
+          <span class="text-[11px] text-slate-400 font-semibold uppercase mr-1">Policies:</span>
           <div id="cmp-sched-chips" class="flex flex-wrap gap-1.5"></div>
         </div>
       </div>
 
-      <!-- Benchmark Output -->
-      <div id="cmp-placeholder" class="panel p-10 text-center text-slate-400">
-        <i data-lucide="bar-chart-3" class="w-10 h-10 mx-auto mb-2 text-slate-600"></i>
-        <p class="text-sm font-medium text-slate-300">Select policies above and click <span class="text-sky-400">Run Head-to-Head Benchmark</span></p>
-        <p class="text-xs text-slate-500 mt-1">All schedulers receive the exact same job arrivals, durations, and cluster topology.</p>
+      <div id="cmp-placeholder" class="card p-12 text-center text-sm text-slate-400">
+        Select policies above and click <strong class="text-white">Run Comparison</strong> to evaluate all schedulers on the exact same job stream.
       </div>
 
       <div id="cmp-results-wrap" class="hidden space-y-4">
-        <div class="panel overflow-hidden">
-          <div class="panel-header">
-            <h2 class="text-sm font-semibold">Summary Metrics Table</h2>
-            <span id="cmp-meta-badge" class="text-xs text-slate-400 mono"></span>
+        <div class="card overflow-hidden">
+          <div class="card-head">
+            <span class="text-xs font-semibold text-white">Benchmark Summary</span>
+            <span id="cmp-meta-badge" class="mono text-xs text-slate-400"></span>
           </div>
           <div id="cmp-table-wrap" class="overflow-x-auto"></div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div class="panel p-4">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Average vs P99 Wait Time (seconds)</h3>
+          <div class="card p-4">
+            <div class="text-xs font-semibold text-slate-300 mb-3">Average vs P99 Wait Time (seconds)</div>
             <div class="h-[260px]"><canvas id="cmp-chart-wait"></canvas></div>
           </div>
-          <div class="panel p-4">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Wait Time by GPU Demand Class (1G / 2G / 4G / 8G)</h3>
+          <div class="card p-4">
+            <div class="text-xs font-semibold text-slate-300 mb-3">Wait Time by GPU Demand (1G / 2G / 4G / 8G)</div>
             <div class="h-[260px]"><canvas id="cmp-chart-bysize"></canvas></div>
-          </div>
-          <div class="panel p-4">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Cluster Load-Balance Index σ² (Lower = Better)</h3>
-            <div class="h-[260px]"><canvas id="cmp-chart-lb"></canvas></div>
-          </div>
-          <div class="panel p-4">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Queue Length Trajectory Over Time</h3>
-            <div class="h-[260px]"><canvas id="cmp-chart-qtl"></canvas></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ========================================================= -->
-    <!-- TAB 3: FAIRNESS & HETEROGENEITY LAB (N1 & N2 INTERACTIVE) -->
-    <!-- ========================================================= -->
-    <section id="tab-lab" class="tab-view hidden space-y-4">
+    <!-- =========================================================== -->
+    <!-- TAB 3: FAIRNESS & HETEROGENEITY (N1 & N2)                   -->
+    <!-- =========================================================== -->
+    <section id="tab-research" class="tab-view hidden space-y-4">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-        <!-- N2 Interactive Fragmentation Calculator -->
-        <div class="panel lg:col-span-6 p-4 space-y-4">
-          <div class="flex items-start justify-between gap-2 border-b border-slate-800 pb-3">
-            <div>
-              <span class="badge badge-purple mb-1">N2 Mechanism Inspector</span>
-              <h2 class="text-base font-bold text-slate-100">Original F(r) vs Capacity-Aware F_C(r)</h2>
-              <p class="text-xs text-slate-400 mt-0.5">See how 4-GPU and 8-GPU servers score leftover capacity differently under mixed demand.</p>
-            </div>
+        <!-- N2 Interactive Calculator -->
+        <div class="lg:col-span-6 card p-4 space-y-3.5">
+          <div class="border-b border-[#252a36] pb-2.5">
+            <div class="text-sm font-semibold text-white">Capacity-Aware Fragmentation (F vs F_C)</div>
+            <p class="text-xs text-slate-400 mt-0.5">How 4-GPU and 8-GPU servers score leftover capacity under mixed job sizes.</p>
           </div>
 
-          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-[#0b1120] p-3 rounded-xl border border-slate-800">
+          <div class="grid grid-cols-5 gap-2">
+            <div><label class="field-lbl">1G %</label><input id="n2-w1" type="number" value="45" class="inp mono w-full" /></div>
+            <div><label class="field-lbl">2G %</label><input id="n2-w2" type="number" value="25" class="inp mono w-full" /></div>
+            <div><label class="field-lbl">4G %</label><input id="n2-w4" type="number" value="15" class="inp mono w-full" /></div>
+            <div><label class="field-lbl">8G %</label><input id="n2-w8" type="number" value="15" class="inp mono w-full" /></div>
             <div>
-              <label class="ctrl-label">1-GPU %</label>
-              <input id="n2-w1" type="number" step="5" min="0" max="100" value="45" class="ctrl-input mono" />
-            </div>
-            <div>
-              <label class="ctrl-label">2-GPU %</label>
-              <input id="n2-w2" type="number" step="5" min="0" max="100" value="25" class="ctrl-input mono" />
-            </div>
-            <div>
-              <label class="ctrl-label">4-GPU %</label>
-              <input id="n2-w4" type="number" step="5" min="0" max="100" value="15" class="ctrl-input mono" />
-            </div>
-            <div>
-              <label class="ctrl-label">8-GPU %</label>
-              <input id="n2-w8" type="number" step="5" min="0" max="100" value="15" class="ctrl-input mono" />
-            </div>
-            <div>
-              <label class="ctrl-label">Job Size</label>
-              <select id="n2-jobgpus" class="ctrl-select mono">
-                <option value="1">1 GPU</option>
-                <option value="2" selected>2 GPUs</option>
-                <option value="4">4 GPUs</option>
+              <label class="field-lbl">Job Size</label>
+              <select id="n2-jobgpus" class="sel w-full mono">
+                <option value="1">1G</option>
+                <option value="2" selected>2G</option>
+                <option value="4">4G</option>
               </select>
             </div>
           </div>
 
-          <button class="btn btn-primary w-full" onclick="runN2Inspector()">
-            <i data-lucide="calculator" class="w-4 h-4"></i> Recompute Fragmentation Curves &amp; Placement Gradients
-          </button>
+          <button class="btn btn-blue w-full" onclick="runN2Inspector()">Compute F(r) vs F_C(r)</button>
 
           <div id="n2-gradient-cards" class="grid grid-cols-2 gap-3"></div>
+          <div class="h-[210px]"><canvas id="n2-chart"></canvas></div>
 
-          <div class="h-[230px]"><canvas id="n2-chart"></canvas></div>
-
-          <div class="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-200/90 p-3 rounded-xl leading-relaxed">
-            <strong>Why F_C is an insightful negative result:</strong> Filtering out 8-GPU demand when scoring 4-GPU servers reduces the perceived fragmentation drop on 4-GPU nodes. Because MCG minimizes <span class="mono">G = F(r - g) - F(r)</span>, ignoring 8-GPU pressure makes 4-GPU servers appear relatively less urgent to pack—causing small jobs to spill onto and break up scarce 8-GPU servers!
+          <div class="text-xs text-slate-300 bg-[#0b0d11] border border-[#252a36] p-3 rounded-lg leading-relaxed">
+            <strong class="text-amber-400">Empirical Finding (E5):</strong> Ignoring 8-GPU demand on 4-GPU servers reduces the gradient advantage of packing 4-GPU servers, causing small jobs to fragment 8-GPU nodes instead (+8% to +20% wait).
           </div>
         </div>
 
-        <!-- Live E5 Experiment Runner -->
-        <div class="panel lg:col-span-6 p-4 space-y-4">
-          <div class="flex items-start justify-between gap-2 border-b border-slate-800 pb-3">
+        <!-- Full-Trace Experimental Highlights (E4 & E5) -->
+        <div class="lg:col-span-6 card p-4 space-y-3.5">
+          <div class="flex items-center justify-between border-b border-[#252a36] pb-2.5">
             <div>
-              <span class="badge badge-cyan mb-1">Experiment E5 (Live Runner)</span>
-              <h2 class="text-base font-bold text-slate-100">Homogeneous 8-GPU vs Mixed 4+8-GPU Cluster</h2>
-              <p class="text-xs text-slate-400 mt-0.5">Run live across 15 Venus clusters (1,080 GPUs preserved) comparing F and F_C.</p>
+              <div class="text-sm font-semibold text-white">Full-Trace Benchmarks (6,941 Venus Jobs)</div>
+              <p class="text-xs text-slate-400 mt-0.5">Verified results from E4 (Fairness) and E5 (Mixed 4+8-GPU).</p>
+            </div>
+            <div class="flex gap-1">
+              <button class="btn text-xs !py-1" onclick="showSavedStudy('e5')">E5 Mixed</button>
+              <button class="btn text-xs !py-1" onclick="showSavedStudy('e4')">E4 Fairness</button>
+              <button class="btn text-xs !py-1" onclick="showSavedStudy('e7')">E7 Scale</button>
             </div>
           </div>
 
-          <div class="grid grid-cols-3 gap-2.5">
-            <div>
-              <label class="ctrl-label">Trace</label>
-              <select id="e5-trace" class="ctrl-select"></select>
-            </div>
-            <div>
-              <label class="ctrl-label">Jobs Slice</label>
-              <input id="e5-njobs" type="number" min="100" max="6941" step="100" value="600" class="ctrl-input mono" />
-            </div>
-            <div>
-              <label class="ctrl-label">η Compression</label>
-              <input id="e5-eta" type="number" min="1" max="30" step="1" value="15" class="ctrl-input mono" />
-            </div>
-          </div>
-
-          <button id="btn-run-e5" class="btn btn-emerald w-full" onclick="runLiveE5()">
-            <i data-lucide="flask-conical" class="w-4 h-4"></i> Execute Live E5 Experiment
-          </button>
-
-          <div class="h-[240px]"><canvas id="e5-live-chart"></canvas></div>
-          <div id="e5-live-table" class="overflow-x-auto max-h-[240px]"></div>
+          <div class="h-[220px]"><canvas id="saved-study-chart"></canvas></div>
+          <div id="saved-study-table" class="overflow-x-auto max-h-[250px]"></div>
         </div>
 
       </div>
-    </section>
-
-    <!-- ========================================================= -->
-    <!-- TAB 4: RESEARCH RESULTS (FULL-TRACE BENCHMARKS E4/E5/E7)  -->
-    <!-- ========================================================= -->
-    <section id="tab-research" class="tab-view hidden space-y-4">
-      <div class="panel p-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="text-base font-bold text-slate-100">Full-Trace Experimental Benchmarks (E4, E5, E7)</h2>
-          <p class="text-xs text-slate-400">Verified full-trace runs (6,941 Venus jobs &amp; 5,043 Philly jobs) saved in <span class="mono text-sky-400">results/</span>.</p>
-        </div>
-        <div class="flex gap-1.5">
-          <button class="sub-tab active" data-res="e5" onclick="switchResearchSub('e5')">E5: Heterogeneity (N2)</button>
-          <button class="sub-tab" data-res="e4" onclick="switchResearchSub('e4')">E4: Fairness &amp; Drain Reserve (N1)</button>
-          <button class="sub-tab" data-res="e7" onclick="switchResearchSub('e7')">E7: Score Normalization (N4)</button>
-        </div>
-      </div>
-
-      <div id="research-content" class="space-y-4"></div>
     </section>
 
   </main>
