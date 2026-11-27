@@ -1,2 +1,9 @@
 # The simulation core uses only the Python standard library (3.10+).
 pytest
+
+# Control Plane Web Dashboard (FastAPI + Uvicorn) & Visualization
+fastapi>=0.110
+uvicorn>=0.29
+streamlit>=1.30
+matplotlib>=3.7
+pandas>=1.5

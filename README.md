@@ -126,3 +126,57 @@ python -m pytest tests -q
 python run.py --topology configs/venus15.json --trace data/clean/venus.csv --eta 15 --scheduler mcg mcg_fair
 python experiments/run_fairness_experiments.py            # E4 + E7, about 2 minutes, writes results/E4_E7_fairness_results.md
 ```
+
+## Heterogeneous servers (N2) and dashboard — Person 5
+
+Code: `mcgsched/mechanisms/fragmentation.py` (adds `CapacityAwareDemandModel`),
+`mcgsched/schedulers/mcg_hetero.py`, `configs/venus15_mixed.json`,
+`dashboard/app.py`, `tests/test_heterogeneous.py`,
+`experiments/run_e5_experiment.py`.
+
+### Mixed topology (`venus15_mixed.json`)
+
+Same 15 clusters and 1,080 GPU total as `venus15.json`. Each cluster: `floor(S/2)`
+eight-GPU servers are split into two four-GPU servers; the remaining `ceil(S/2)`
+servers keep 8 GPUs.  Total GPU capacity is unchanged by design.
+
+```
+python -c "from mcgsched.models import ClusterState; s=ClusterState.from_json('configs/venus15_mixed.json'); print(s)"
+# → ClusterState(15 clusters, 0/1080 GPUs used)
+```
+
+### Capacity-aware fragmentation F_C
+
+For a server with capacity C, only demands d ≤ C are relevant to its fragmentation
+score. `CapacityAwareDemandModel.gradient_for_server(free, gpus, server_cap)` applies
+this filter. On homogeneous topologies (all servers with the same capacity) the result
+is **identical** to the original `DemandModel.gradient()` — tested.
+
+| Registry name | What it adds |
+|---|---|
+| `mcg_fc`      | Capacity-aware F_C (truncated, not renormalised) |
+| `mcg_fc_norm` | F_C renormalised: p̃(d\|C) = p̃_d / Σ_{q≤C} p̃_q |
+
+### E5 experiment
+
+```
+python experiments/run_e5_experiment.py
+# writes results/RESULTS_E5.md, results/e5_heterogeneous.json, results/figures/e5_*.png
+```
+
+**Key results (Venus, η=15):**
+- Mixed topology raises every scheduler's avg wait ~4× because 8-GPU jobs lose half their candidate servers.
+- MCG-Sched remains best on the mixed topology.
+- F_C is a negative result: ignoring 8-GPU demand on 4-GPU servers makes those servers look less fragmented, so small jobs preferentially break up 8-GPU servers instead.
+
+### Dashboard
+
+```
+streamlit run dashboard/app.py
+```
+
+Three tabs:
+1. **Run & Visualise** — step / play / run; GPU grid with reserved servers outlined in orange; waiting queue; live metrics; timeline charts.
+2. **Compare** — run any set of schedulers on the same workload side-by-side with bar charts.
+3. **E5 Experiment** — in-browser reproduction of the N2 heterogeneity results with figures.
+

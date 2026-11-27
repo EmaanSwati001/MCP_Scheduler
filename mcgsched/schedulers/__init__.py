@@ -3,6 +3,7 @@ from .baselines import FGD, Consolidate, MASTLike, RandomPlacement
 from .fcfs import FCFSFirstFit
 from .mcg import MCGNoQueue, MCGNoWindow, MCGPlain, MCGSched
 from .mcg_fair import MCGAging, MCGFairFull, MCGGuard, MCGNorm
+from .mcg_hetero import MCGHetero, MCGHeteroNorm  # N2: capacity-aware fragmentation
 
 # Register new policies here so run.py and the dashboard can find them by name.
 REGISTRY = {
@@ -19,6 +20,8 @@ REGISTRY = {
     MCGGuard.name: MCGGuard,
     MCGFairFull.name: MCGFairFull,
     MCGNorm.name: MCGNorm,
+    MCGHetero.name: MCGHetero,       # N2: capacity-aware F_C
+    MCGHeteroNorm.name: MCGHeteroNorm,  # N2: capacity-aware F_C + renorm
 }
 
 
