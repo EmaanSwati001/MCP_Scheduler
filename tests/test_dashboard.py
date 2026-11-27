@@ -30,6 +30,7 @@ from dashboard.server import (
     sim_run,
     sim_state,
     sim_step,
+    sim_step_batch,
 )
 
 
@@ -123,8 +124,11 @@ def test_server_endpoints_end_to_end():
     step_res = sim_step(StepRequest(session_id="test_sess", count=2))
     assert step_res["step_count"] == 2
 
+    batch_res = sim_step_batch(StepRequest(session_id="test_sess", count=4))
+    assert len(batch_res["frames"]) == 4
+
     state_res = sim_state(session_id="test_sess")
-    assert state_res["step_count"] == 2
+    assert state_res["step_count"] == 6
 
     run_res = sim_run(RunRequest(session_id="test_sess"))
     assert run_res["done"] is True

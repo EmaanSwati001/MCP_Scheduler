@@ -56,6 +56,7 @@ class InitRequest(BaseModel):
     burst: bool = False
     seed: int = 0
     params: Optional[Dict[str, Any]] = None
+    seek_mode: str = "none"
 
 
 class StepRequest(BaseModel):
@@ -119,6 +120,7 @@ def sim_init(req: InitRequest) -> Dict[str, Any]:
             burst=req.burst,
             seed=req.seed,
             params=req.params,
+            seek_mode=req.seek_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -132,6 +134,14 @@ def sim_step(req: StepRequest) -> Dict[str, Any]:
     if sess is None:
         raise HTTPException(status_code=404, detail="Simulation session not initialized")
     return sess.step(req.count)
+
+
+@app.post("/api/sim/step_batch")
+def sim_step_batch(req: StepRequest) -> Dict[str, Any]:
+    sess = _SESSIONS.get(req.session_id)
+    if sess is None:
+        raise HTTPException(status_code=404, detail="Simulation session not initialized")
+    return {"frames": sess.step_batch(req.count)}
 
 
 @app.post("/api/sim/run")

@@ -374,6 +374,7 @@ class SimulationSession:
         burst: bool = False,
         seed: int = 0,
         params: Optional[Dict[str, Any]] = None,
+        seek_mode: str = "none",
     ) -> None:
         self.config = {
             "trace_id": trace_id,
@@ -384,6 +385,7 @@ class SimulationSession:
             "burst": burst,
             "seed": seed,
             "params": params or {},
+            "seek_mode": seek_mode,
         }
         jobs = load_workload(trace_id, n_jobs=n_jobs, eta=eta, burst=burst, seed=seed)
         self.total_jobs = len(jobs)
@@ -405,6 +407,32 @@ class SimulationSession:
 
         proxy = ObservedScheduler(inner_sched, self)
         self.sim = Simulator(jobs, state, proxy, listener=self._on_event)
+
+        if seek_mode in ("peak", "reserve"):
+            self._seek(seek_mode)
+
+    def _seek(self, mode: str) -> None:
+        """Fast-forward the real simulation to a high-contention or reservation moment."""
+        target_gpu = int(self.sim.state.total_capacity * 0.65)
+        self.capture_details = False
+        while self.sim.step():
+            self.step_count += 1
+            if mode == "reserve":
+                has_res = (
+                    hasattr(self.inner_scheduler, "reserved_servers")
+                    and len(self.inner_scheduler.reserved_servers()) > 0
+                )
+                if has_res and self.sim.state.used_gpus >= target_gpu:
+                    break
+            else:
+                if self.sim.state.used_gpus >= target_gpu and len(self.sim.queue) >= 12:
+                    break
+        if not self.sim._heap:
+            self.done = True
+        self.capture_details = True
+        # Take one captured step so last_decision and step transitions are populated
+        if not self.done:
+            self.step(1)
 
     def _on_event(self, event: str, sim: Simulator, job: Job) -> None:
         if event == "start" and self.capture_details:
@@ -563,6 +591,16 @@ class SimulationSession:
             self.done = True
         self.capture_details = True
         return self.snapshot()
+
+    def step_batch(self, count: int = 10) -> List[Dict[str, Any]]:
+        """Advance `count` real simulation steps and return every frame snapshot
+        for smooth buffered playback."""
+        frames: List[Dict[str, Any]] = []
+        for _ in range(max(1, min(int(count), 40))):
+            if self.done:
+                break
+            frames.append(self.step(1))
+        return frames
 
     def run_to_end(self) -> Dict[str, Any]:
         if not self.done:

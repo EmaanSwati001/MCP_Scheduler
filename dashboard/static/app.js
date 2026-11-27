@@ -1,15 +1,23 @@
-/* MCG-Sched Live Animated Simulator Frontend */
+/* MCG-Sched 60fps Live Animated Simulator Frontend */
 
 const SESSION_ID = "sim_" + Math.random().toString(36).slice(2, 10);
 
 let META = { traces: [], topologies: [], schedulers: [] };
 let SNAPSHOT = null;
-let PLAY_TIMER = null;
+let FRAME_BUFFER = [];
+let IS_FETCHING_BATCH = false;
 let IS_PLAYING = false;
+let LAST_STEP_AT = 0;
+let PREV_NOW = 0;
+let DISPLAY_NOW = 0;
+let MAP_TOPOLOGY_SIG = "";
 let LAST_COMPARE_DATA = null;
 let SAVED_RESEARCH = null;
 let CHARTS = {};
 
+// 60fps particle animations on #flow-canvas
+const PARTICLES = [];
+const RIPPLES = [];
 const PALETTE = ["#3b82f6", "#14b8a6", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"];
 
 // ---------------------------------------------------------------------------
@@ -18,9 +26,8 @@ const PALETTE = ["#3b82f6", "#14b8a6", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4
 document.addEventListener("DOMContentLoaded", async () => {
   lucide.createIcons();
   await loadMetadata();
-  await onScenarioChange(false);
-  // Start with a burst step so the cluster immediately shows live activity
-  await stepSimulation(1);
+  await onScenarioChange(true);
+  requestAnimationFrame(animationLoop);
   runN2Inspector().catch(() => {});
   loadSavedResearch().catch(() => {});
 });
@@ -70,9 +77,9 @@ async function loadMetadata() {
     .map(s => `<option value="${s.id}" ${s.id === "mcg" ? "selected" : ""}>${s.name}</option>`)
     .join("");
 
-  const defCompare = new Set(["fcfs", "consolidate", "fgd", "mcg", "mcg_fair", "mcg_fc"]);
+  const defCmp = new Set(["fcfs", "consolidate", "fgd", "mcg", "mcg_fair", "mcg_fc"]);
   document.getElementById("cmp-sched-chips").innerHTML = META.schedulers
-    .map(s => `<button type="button" class="policy-chip ${defCompare.has(s.id) ? "selected" : ""}" data-sched="${s.id}" onclick="this.classList.toggle('selected')">${s.id}</button>`)
+    .map(s => `<button type="button" class="policy-chip ${defCmp.has(s.id) ? "selected" : ""}" data-sched="${s.id}" onclick="this.classList.toggle('selected')">${s.id}</button>`)
     .join("");
 
   renderPolicyParams();
@@ -89,7 +96,7 @@ function renderPolicyParams() {
   const defs = {
     w: { label: "Weight w", val: 0.5, step: 0.05, min: 0, max: 1 },
     lam: { label: "Blend λ", val: 1.0, step: 0.1, min: 0, max: 10 },
-    k: { label: "Guard k", val: 3.0, step: 0.5, min: 0.2, max: 10 },
+    k: { label: "Guard k", val: 1.0, step: 0.5, min: 0.2, max: 10 },
     beta: { label: "Aging β", val: 1.0, step: 0.25, min: 0, max: 5 },
   };
   box.innerHTML = s.params
@@ -113,7 +120,7 @@ function readParams() {
 }
 
 // ---------------------------------------------------------------------------
-// Tabs & Drawers
+// Navigation
 // ---------------------------------------------------------------------------
 function switchTab(tabId) {
   document.querySelectorAll(".top-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
@@ -125,23 +132,22 @@ function toggleAdvancedDrawer() {
   document.getElementById("advanced-drawer").classList.toggle("hidden");
 }
 
-function toggleScoreDrawer() {
-  document.getElementById("score-drawer").classList.toggle("hidden");
-}
-
 // ---------------------------------------------------------------------------
-// Scenarios & Simulation Control
+// Scenarios & Real Simulator Control
 // ---------------------------------------------------------------------------
-async function onScenarioChange(autoStep = true) {
+async function onScenarioChange(autoPlayAfter = false) {
   stopPlay();
   const sc = document.getElementById("live-scenario").value;
-  if (sc === "venus_std") {
+  let seekMode = "peak";
+
+  if (sc === "venus_peak") {
     document.getElementById("live-trace").value = "venus";
-    document.getElementById("live-njobs").value = 600;
+    document.getElementById("live-njobs").value = 0;
     document.getElementById("live-eta").value = 15;
     document.getElementById("live-burst").checked = false;
     document.getElementById("live-topo").value = "venus15";
     document.getElementById("live-sched").value = "mcg";
+    seekMode = "peak";
   } else if (sc === "burst_800") {
     document.getElementById("live-trace").value = "synthetic";
     document.getElementById("live-njobs").value = 800;
@@ -149,39 +155,46 @@ async function onScenarioChange(autoStep = true) {
     document.getElementById("live-burst").checked = true;
     document.getElementById("live-topo").value = "venus15";
     document.getElementById("live-sched").value = "mcg";
+    seekMode = "none";
   } else if (sc === "fairness_n1") {
     document.getElementById("live-trace").value = "venus";
-    document.getElementById("live-njobs").value = 1000;
+    document.getElementById("live-njobs").value = 0;
     document.getElementById("live-eta").value = 15;
     document.getElementById("live-burst").checked = false;
     document.getElementById("live-topo").value = "venus15";
     document.getElementById("live-sched").value = "mcg_fair";
+    seekMode = "reserve";
   } else if (sc === "mixed_n2") {
     document.getElementById("live-trace").value = "venus";
-    document.getElementById("live-njobs").value = 800;
+    document.getElementById("live-njobs").value = 0;
     document.getElementById("live-eta").value = 15;
     document.getElementById("live-burst").checked = false;
     document.getElementById("live-topo").value = "venus15_mixed";
     document.getElementById("live-sched").value = "mcg_fc";
+    seekMode = "peak";
   } else if (sc === "philly_std") {
     document.getElementById("live-trace").value = "philly";
-    document.getElementById("live-njobs").value = 600;
+    document.getElementById("live-njobs").value = 0;
     document.getElementById("live-eta").value = 4;
     document.getElementById("live-burst").checked = false;
     document.getElementById("live-topo").value = "paper_8x16";
     document.getElementById("live-sched").value = "mcg";
+    seekMode = "peak";
   }
+
   renderPolicyParams();
-  await initSimulation();
-  if (autoStep) {
-    await stepSimulation(sc === "burst_800" ? 1 : 25);
+  await initSimulation(false, seekMode);
+  if (autoPlayAfter) {
+    startPlay();
   }
 }
 
 async function onPolicyChange() {
   renderPolicyParams();
-  await initSimulation();
-  await stepSimulation(10);
+  const sc = document.getElementById("live-scenario").value;
+  const sched = document.getElementById("live-sched").value;
+  const seekMode = sc === "burst_800" ? "none" : (sched === "mcg_fair" ? "reserve" : "peak");
+  await initSimulation(false, seekMode);
 }
 
 function setStatus(state, text) {
@@ -193,21 +206,34 @@ function setStatus(state, text) {
   document.getElementById("status-text").textContent = text;
 }
 
-async function initSimulation() {
+async function initSimulation(keepTune = false, seekOverride = null) {
   stopPlay();
+  FRAME_BUFFER = [];
+  PARTICLES.length = 0;
+  RIPPLES.length = 0;
+
+  const sc = document.getElementById("live-scenario").value;
+  const seekMode = seekOverride !== null ? seekOverride : (
+    keepTune ? "none" : (sc === "burst_800" ? "none" : (sc === "fairness_n1" ? "reserve" : "peak"))
+  );
+
   SNAPSHOT = await apiPost("/api/sim/init", {
     session_id: SESSION_ID,
     trace_id: document.getElementById("live-trace").value,
     topo_id: document.getElementById("live-topo").value,
     sched_id: document.getElementById("live-sched").value,
-    n_jobs: parseInt(document.getElementById("live-njobs").value || "400", 10),
-    eta: parseFloat(document.getElementById("live-eta").value || "10"),
+    n_jobs: parseInt(document.getElementById("live-njobs").value || "0", 10),
+    eta: parseFloat(document.getElementById("live-eta").value || "15"),
     burst: document.getElementById("live-burst").checked,
     seed: 0,
     params: readParams(),
+    seek_mode: seekMode,
   });
+
+  PREV_NOW = SNAPSHOT.now;
+  DISPLAY_NOW = SNAPSHOT.now;
   setStatus("idle", "Ready");
-  renderSnapshot();
+  applySnapshot(SNAPSHOT, false);
 }
 
 async function stepSimulation(count = 1) {
@@ -215,22 +241,20 @@ async function stepSimulation(count = 1) {
     stopPlay();
     return;
   }
-  SNAPSHOT = await apiPost("/api/sim/step", { session_id: SESSION_ID, count });
-  renderSnapshot();
-  if (SNAPSHOT.done) {
-    stopPlay();
-    setStatus("done", "Complete");
-  }
+  FRAME_BUFFER = [];
+  const nextSnap = await apiPost("/api/sim/step", { session_id: SESSION_ID, count });
+  applySnapshot(nextSnap, true);
 }
 
 async function runToEnd() {
   stopPlay();
+  FRAME_BUFFER = [];
   if (!SNAPSHOT) return;
   setStatus("running", "Completing...");
   document.getElementById("btn-run-end").disabled = true;
   try {
-    SNAPSHOT = await apiPost("/api/sim/run", { session_id: SESSION_ID });
-    renderSnapshot();
+    const endSnap = await apiPost("/api/sim/run", { session_id: SESSION_ID });
+    applySnapshot(endSnap, false);
     setStatus("done", "Complete");
   } finally {
     document.getElementById("btn-run-end").disabled = SNAPSHOT?.done ?? false;
@@ -245,34 +269,18 @@ function togglePlay() {
 function startPlay() {
   if (!SNAPSHOT || SNAPSHOT.done) return;
   IS_PLAYING = true;
+  LAST_STEP_AT = performance.now();
   const btn = document.getElementById("btn-play");
   btn.innerHTML = `<i data-lucide="pause" class="w-3.5 h-3.5"></i> Pause`;
   btn.classList.remove("btn-blue");
   btn.classList.add("btn-amber");
   lucide.createIcons();
-  setStatus("running", "Simulating");
-
-  const tick = async () => {
-    if (!IS_PLAYING || !SNAPSHOT || SNAPSHOT.done) {
-      stopPlay();
-      return;
-    }
-    const delay = parseInt(document.getElementById("play-speed").value, 10);
-    const stepSize = delay <= 80 ? 4 : 1;
-    await stepSimulation(stepSize);
-    if (IS_PLAYING && !SNAPSHOT.done) {
-      PLAY_TIMER = setTimeout(tick, delay);
-    }
-  };
-  tick();
+  setStatus("running", "Live");
+  prefetchBatch();
 }
 
 function stopPlay() {
   IS_PLAYING = false;
-  if (PLAY_TIMER) {
-    clearTimeout(PLAY_TIMER);
-    PLAY_TIMER = null;
-  }
   const btn = document.getElementById("btn-play");
   if (btn) {
     btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Play`;
@@ -283,141 +291,139 @@ function stopPlay() {
   if (SNAPSHOT && !SNAPSHOT.done) setStatus("idle", "Paused");
 }
 
-// ---------------------------------------------------------------------------
-// Render Live Stage + Animations
-// ---------------------------------------------------------------------------
-function renderSnapshot() {
-  const s = SNAPSHOT;
-  if (!s) return;
-  const m = s.metrics;
+async function prefetchBatch() {
+  if (!IS_PLAYING || IS_FETCHING_BATCH || (SNAPSHOT && SNAPSHOT.done)) return;
+  if (FRAME_BUFFER.length >= 10) return;
+  IS_FETCHING_BATCH = true;
+  try {
+    const res = await apiPost("/api/sim/step_batch", { session_id: SESSION_ID, count: 16 });
+    if (res.frames && res.frames.length) {
+      FRAME_BUFFER.push(...res.frames);
+    }
+  } catch (e) {
+    console.error(e);
+    stopPlay();
+  } finally {
+    IS_FETCHING_BATCH = false;
+  }
+}
 
-  document.getElementById("header-clock").textContent = `t = ${s.now.toLocaleString()} s`;
-  const pct = s.total_jobs > 0 ? Math.round((m.completed / s.total_jobs) * 100) : 0;
+// ---------------------------------------------------------------------------
+// 60 FPS Animation & Buffered Playback Loop
+// ---------------------------------------------------------------------------
+function animationLoop(nowMs) {
+  requestAnimationFrame(animationLoop);
 
-  document.getElementById("kpi-pct").textContent = `${pct}%`;
-  document.getElementById("kpi-done").textContent = m.completed.toLocaleString();
-  document.getElementById("kpi-total").textContent = `/ ${s.total_jobs.toLocaleString()} jobs`;
-  document.getElementById("sim-progress-bar").style.width = `${pct}%`;
+  if (IS_PLAYING && SNAPSHOT && !SNAPSHOT.done) {
+    const interval = parseInt(document.getElementById("play-speed").value || "180", 10);
+    const elapsed = nowMs - LAST_STEP_AT;
+
+    // Smooth clock interpolation between frames
+    if (FRAME_BUFFER.length > 0) {
+      const nextTarget = FRAME_BUFFER[0].now;
+      const frac = Math.min(1, elapsed / interval);
+      DISPLAY_NOW = PREV_NOW + (nextTarget - PREV_NOW) * frac;
+      document.getElementById("header-clock").textContent = `t = ${DISPLAY_NOW.toFixed(1)} s`;
+    }
+
+    if (elapsed >= interval) {
+      LAST_STEP_AT = nowMs;
+      if (FRAME_BUFFER.length > 0) {
+        const frame = FRAME_BUFFER.shift();
+        applySnapshot(frame, true);
+        if (FRAME_BUFFER.length < 6) prefetchBatch();
+      } else if (!IS_FETCHING_BATCH) {
+        prefetchBatch();
+      }
+    }
+  }
+
+  drawFlowCanvas();
+}
+
+function applySnapshot(snap, animateParticles) {
+  PREV_NOW = SNAPSHOT ? SNAPSHOT.now : snap.now;
+  DISPLAY_NOW = snap.now;
+  SNAPSHOT = snap;
+
+  document.getElementById("header-clock").textContent = `t = ${snap.now.toFixed(1)} s`;
+  if (snap.done) {
+    stopPlay();
+    setStatus("done", "Complete");
+  }
+
+  const m = snap.metrics;
+  const pct = snap.total_jobs > 0 ? Math.round((m.completed / snap.total_jobs) * 100) : 0;
 
   document.getElementById("kpi-util").textContent = `${m.utilization_pct.toFixed(1)}%`;
-  document.getElementById("kpi-gpus-sub").textContent = `${m.used_gpus} / ${m.total_gpus} GPUs`;
-  document.getElementById("kpi-stranded").textContent = `· ${m.stranded_gpus} stranded`;
+  document.getElementById("kpi-gpus-sub").textContent = `${m.used_gpus.toLocaleString()} / ${m.total_gpus.toLocaleString()} GPUs`;
   document.getElementById("util-progress-bar").style.width = `${m.utilization_pct}%`;
 
-  document.getElementById("kpi-wait-cnt").textContent = `${m.waiting} waiting`;
-  document.getElementById("kpi-avg-wait").textContent = fmtShortTime(s.summary ? s.summary.avg_wait : m.avg_wait);
-  document.getElementById("kpi-p99-wait").textContent = `P99: ${fmtShortTime(s.summary ? s.summary.p99_wait : m.p99_wait)}`;
-  document.getElementById("kpi-running-sub").textContent = `${m.running} running jobs`;
+  document.getElementById("kpi-wait-cnt").textContent = `${m.waiting} jobs`;
+  document.getElementById("kpi-avg-wait").textContent = `Avg wait: ${fmtShortTime(snap.summary ? snap.summary.avg_wait : m.avg_wait)}`;
+  document.getElementById("kpi-running-sub").textContent = `${m.running} running · P99: ${fmtShortTime(snap.summary ? snap.summary.p99_wait : m.p99_wait)}`;
 
+  document.getElementById("kpi-lb").textContent = (snap.summary ? snap.summary.avg_lb_index : m.lb_index).toFixed(4);
+  document.getElementById("kpi-stranded").textContent = `${m.stranded_gpus} stranded`;
+
+  document.getElementById("kpi-done").textContent = `${m.completed.toLocaleString()} / ${snap.total_jobs.toLocaleString()}`;
   document.getElementById("kpi-res-badge").textContent = `${m.reserved_count} reserved`;
-  document.getElementById("kpi-lb").textContent = (s.summary ? s.summary.avg_lb_index : m.lb_index).toFixed(5);
-  document.getElementById("kpi-fair-sub").textContent = `${m.protected_count} protected · ${m.starved_completed + m.starved_waiting} starved`;
+  document.getElementById("sim-progress-bar").style.width = `${pct}%`;
 
-  document.getElementById("btn-step1").disabled = s.done;
-  document.getElementById("btn-step10").disabled = s.done;
-  document.getElementById("btn-play").disabled = s.done;
-  document.getElementById("btn-run-end").disabled = s.done;
+  document.getElementById("btn-step1").disabled = snap.done;
+  document.getElementById("btn-play").disabled = snap.done;
+  document.getElementById("btn-run-end").disabled = snap.done;
 
   renderQueueBlocks();
   renderDecisionSpotlight();
-  renderClusterRack();
+  updateClusterMapInPlace(animateParticles);
   renderLiveChart();
   renderEventTicker();
-  requestAnimationFrame(drawDispatchBeams);
+
+  if (animateParticles) {
+    spawnDispatchParticles();
+  }
 }
 
-function renderQueueBlocks() {
+// ---------------------------------------------------------------------------
+// In-Place 5x3 Cluster Map (Zero Flicker)
+// ---------------------------------------------------------------------------
+function ensureClusterMapBuilt() {
   const s = SNAPSHOT;
-  document.getElementById("q-count-pill").textContent = s.metrics.waiting;
-  const focalId = s.last_decision?.focal_job_id;
-  const box = document.getElementById("queue-blocks");
+  if (!s) return;
+  const sig = s.clusters.map(c => c.cluster_id + ":" + c.servers.map(sv => sv.capacity).join(",")).join("|");
+  if (sig === MAP_TOPOLOGY_SIG) return;
+  MAP_TOPOLOGY_SIG = sig;
 
-  if (s.queue.length === 0) {
-    box.innerHTML = `<div class="py-12 text-center text-xs text-slate-500">Queue empty — all arrived jobs placed.</div>`;
-    return;
-  }
+  let cap4 = 0, cap8 = 0;
+  s.clusters.forEach(c => c.servers.forEach(sv => { if (sv.capacity <= 4) cap4++; else cap8++; }));
+  document.getElementById("topo-mix-tag").textContent =
+    cap4 > 0 ? `${cap4}×4G + ${cap8}×8G Mixed` : `${cap8}×8G Homogeneous`;
 
-  box.innerHTML = s.queue.slice(0, 14).map(j => {
-    const cls = j.protected ? "protected" : (j.job_id === focalId ? "focal" : "");
-    const gCls = j.gpus >= 8 ? "g8" : j.gpus >= 4 ? "g4" : j.gpus >= 2 ? "g2" : "g1";
-    let pips = "";
-    for (let i = 0; i < j.gpus; i++) pips += `<span class="gpu-pip ${gCls}"></span>`;
+  document.getElementById("cluster-map").innerHTML = s.clusters.map(c => {
+    const strips = c.servers.map(sv => {
+      let dots = "";
+      for (let i = 0; i < sv.capacity; i++) {
+        dots += `<span class="g-dot" id="gd-${c.cluster_id}_${sv.server_id}_${i}"></span>`;
+      }
+      return `<div id="srv-${c.cluster_id}_${sv.server_id}" class="srv-strip ${sv.capacity <= 4 ? "cap4" : ""}">${dots}</div>`;
+    }).join("");
 
-    const badge = j.protected
-      ? `<span class="tag tag-amber">PROTECTED</span>`
-      : j.starved
-      ? `<span class="tag tag-red">STARVED</span>`
-      : `<span class="mono text-[11px] text-slate-400">${j.waited}s</span>`;
-
-    return `<div class="q-block ${cls}" id="qjob-${j.job_id}">
-      <div class="flex items-center gap-2.5">
-        <div class="gpu-bar-mini">${pips}</div>
-        <div>
-          <div class="mono text-xs font-semibold text-white">Job #${j.job_id}</div>
-          <div class="text-[10.5px] text-slate-400">${j.gpus} GPU${j.gpus > 1 ? "s" : ""} · dur ${Math.round(j.duration)}s</div>
-        </div>
+    return `<div id="ctile-${c.cluster_id}" class="c-tile">
+      <div class="flex items-center justify-between text-[11px]">
+        <span class="font-semibold text-slate-200">C${c.cluster_id}</span>
+        <span id="cpct-${c.cluster_id}" class="mono text-slate-400">0%</span>
       </div>
-      <div>${badge}</div>
+      <div class="w-full h-1 bg-[#181c26] rounded-full overflow-hidden">
+        <div id="cbar-${c.cluster_id}" class="h-full bg-blue-500 transition-all duration-200" style="width:0%"></div>
+      </div>
+      <div class="srv-strip-wrap">${strips}</div>
     </div>`;
   }).join("");
 }
 
-function renderDecisionSpotlight() {
-  const d = SNAPSHOT?.last_decision;
-  const box = document.getElementById("decision-spotlight");
-  const drawer = document.getElementById("score-drawer");
-
-  if (!d) {
-    box.innerHTML = `<div class="text-slate-500">No scheduling round evaluated yet.</div>`;
-    drawer.innerHTML = "";
-    return;
-  }
-
-  const placed = d.placements.find(p => p.job_id === d.focal_job_id);
-  const chosenCand = d.candidates.find(c => c.selected);
-
-  box.innerHTML = `
-    <div class="flex items-center justify-between">
-      <span class="mono font-semibold text-white">Job #${d.focal_job_id} (${d.focal_gpus}G)</span>
-      ${placed
-        ? `<span class="tag tag-teal">→ Cluster ${placed.cluster_id} · Server ${placed.server_id}</span>`
-        : `<span class="tag tag-amber">Waiting for capacity</span>`}
-    </div>
-    ${chosenCand ? `
-      <div class="grid grid-cols-3 gap-2 pt-1 text-center bg-[#0b0d11] p-2 rounded-md border border-[#252a36]">
-        <div>
-          <div class="text-[10px] text-slate-500 uppercase">Frag Grad G</div>
-          <div class="mono text-xs text-blue-400 font-semibold">${chosenCand.g_orig.toFixed(4)}</div>
-        </div>
-        <div>
-          <div class="text-[10px] text-slate-500 uppercase">Variance σ²</div>
-          <div class="mono text-xs text-teal-400 font-semibold">${chosenCand.sigma2.toFixed(5)}</div>
-        </div>
-        <div>
-          <div class="text-[10px] text-slate-500 uppercase">Score v</div>
-          <div class="mono text-xs text-white font-semibold">${chosenCand.score.toFixed(4)}</div>
-        </div>
-      </div>` : ""}`;
-
-  if (d.candidates.length > 0) {
-    drawer.innerHTML = `<table class="tbl">
-      <thead><tr><th>Node</th><th>Cap</th><th>Free</th><th>G</th><th>G_C</th><th>σ²</th><th>Score</th></tr></thead>
-      <tbody>
-        ${d.candidates.slice(0, 12).map(c => `<tr class="${c.selected ? "win" : ""}">
-          <td class="mono font-medium">C${c.cluster_id}·S${c.server_id}</td>
-          <td class="mono">${c.capacity}G</td>
-          <td class="mono">${c.free}</td>
-          <td class="mono text-blue-400">${c.g_orig.toFixed(3)}</td>
-          <td class="mono text-slate-300">${c.g_fc.toFixed(3)}</td>
-          <td class="mono text-teal-400">${c.sigma2.toFixed(4)}</td>
-          <td class="mono font-semibold">${c.score.toFixed(3)}</td>
-        </tr>`).join("")}
-      </tbody>
-    </table>`;
-  }
-}
-
-function renderClusterRack() {
+function updateClusterMapInPlace(flashChanges) {
+  ensureClusterMapBuilt();
   const s = SNAPSHOT;
   if (!s) return;
 
@@ -428,97 +434,231 @@ function renderClusterRack() {
     (s.step_finished || []).filter(x => x.placement).map(x => `${x.placement[0]}_${x.placement[1]}`)
   );
 
-  let cap4 = 0, cap8 = 0;
-  s.clusters.forEach(c => c.servers.forEach(sv => { if (sv.capacity <= 4) cap4++; else cap8++; }));
-  document.getElementById("topo-mix-tag").textContent =
-    cap4 > 0 ? `${cap4}×4G + ${cap8}×8G Mixed` : `${cap8}×8G Homogeneous`;
-
-  document.getElementById("cluster-rack").innerHTML = s.clusters.map(c => {
+  s.clusters.forEach(c => {
     const uPct = Math.round(c.utilization * 100);
-    const nodesHtml = c.servers.map(sv => {
+    const pctEl = document.getElementById(`cpct-${c.cluster_id}`);
+    const barEl = document.getElementById(`cbar-${c.cluster_id}`);
+    const tileEl = document.getElementById(`ctile-${c.cluster_id}`);
+    if (pctEl) pctEl.textContent = `${uPct}%`;
+    if (barEl) barEl.style.width = `${uPct}%`;
+
+    let hasRes = false;
+    c.servers.forEach(sv => {
       const key = `${c.cluster_id}_${sv.server_id}`;
+      const srvEl = document.getElementById(`srv-${key}`);
+      if (!srvEl) return;
+
       const isRes = sv.reserved_for !== null;
-      const pulse = startedKeys.has(key) ? "placed-pulse" : (finishedKeys.has(key) ? "freed-flash" : "");
-      const capCls = sv.capacity <= 4 ? "cap4" : "";
-      const resCls = isRes ? "reserved" : "";
+      if (isRes) hasRes = true;
 
-      let slots = "";
-      for (let i = 0; i < sv.used; i++) slots += `<span class="nslot used"></span>`;
-      for (let i = 0; i < sv.free; i++) slots += `<span class="nslot ${isRes ? "res-free" : "free"}"></span>`;
+      srvEl.classList.toggle("reserved", isRes);
+      if (flashChanges) {
+        srvEl.classList.remove("flash-place", "flash-free");
+        if (startedKeys.has(key)) {
+          void srvEl.offsetWidth;
+          srvEl.classList.add("flash-place");
+        } else if (finishedKeys.has(key)) {
+          void srvEl.offsetWidth;
+          srvEl.classList.add("flash-free");
+        }
+      }
 
-      const tip = `C${c.cluster_id}·S${sv.server_id} (${sv.capacity}G) | ${sv.used}/${sv.capacity} used` +
-        (sv.running.length ? " | " + sv.running.map(r => `#${r.job_id}(${r.gpus}G, ${r.remaining}s left)`).join(", ") : "");
+      const runStr = sv.running.length
+        ? sv.running.map(r => `Job #${r.job_id} (${r.gpus}G, ${r.remaining}s left)`).join(" · ")
+        : "Idle";
+      srvEl.title = `Cluster ${c.cluster_id} · Server ${sv.server_id} (${sv.capacity}G) | ${sv.used}/${sv.capacity} GPUs | ${runStr}` +
+        (isRes ? ` | RESERVED for Job #${sv.reserved_for}` : "");
 
-      return `<div id="node-${key}" class="node-box ${capCls} ${resCls} ${pulse}" title="${tip}">
-        <div class="flex items-center justify-between text-[10px]">
-          <span class="mono text-slate-400">S${sv.server_id} <span class="${sv.capacity <= 4 ? "text-purple-300" : "text-slate-500"}">${sv.capacity}G</span></span>
-          ${isRes
-            ? `<span class="mono font-bold text-amber-400">LOCK#${sv.reserved_for}</span>`
-            : `<span class="mono text-slate-300">${sv.used}/${sv.capacity}</span>`}
-        </div>
-        <div class="node-slots">${slots}</div>
-        ${sv.used > 0 ? `<div class="node-exec-bar" style="width:${sv.max_progress_pct || 8}%"></div>` : ""}
-      </div>`;
-    }).join("");
+      for (let i = 0; i < sv.capacity; i++) {
+        const dot = document.getElementById(`gd-${key}_${i}`);
+        if (!dot) continue;
+        if (i < sv.used) {
+          dot.className = sv.capacity >= 8 && sv.used === 8 ? "g-dot on8" : "g-dot on";
+        } else {
+          dot.className = isRes ? "g-dot res" : "g-dot";
+        }
+      }
+    });
 
-    return `<div class="rack-cluster">
-      <div class="flex items-center justify-between mb-1.5">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-semibold text-slate-200">Cluster ${c.cluster_id}</span>
-          <span class="mono text-[11px] text-slate-500">${c.used}/${c.capacity} GPUs</span>
-        </div>
-        <div class="flex items-center gap-2 w-32">
-          <div class="flex-1 h-1.5 bg-[#12151c] rounded-full overflow-hidden">
-            <div class="h-full bg-blue-500 transition-all duration-200" style="width:${uPct}%"></div>
-          </div>
-          <span class="mono text-[11px] text-slate-300 w-8 text-right">${uPct}%</span>
+    if (tileEl) {
+      tileEl.classList.toggle("hot", uPct >= 80);
+      tileEl.classList.toggle("has-reserve", hasRes);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 60 FPS Flying Job Packet Canvas Animation
+// ---------------------------------------------------------------------------
+function spawnDispatchParticles() {
+  const stage = document.getElementById("sim-stage");
+  const qBox = document.getElementById("queue-blocks");
+  if (!stage || !qBox || !SNAPSHOT) return;
+
+  const started = (SNAPSHOT.step_started || []).filter(x => x.placement).slice(0, 8);
+  if (started.length === 0) return;
+
+  const stageRect = stage.getBoundingClientRect();
+  const qRect = qBox.getBoundingClientRect();
+  const sx = qRect.right - stageRect.left - 12;
+  const sy = qRect.top - stageRect.top + 42;
+
+  started.forEach((item, idx) => {
+    const [cid, sid] = item.placement;
+    const srv = document.getElementById(`srv-${cid}_${sid}`);
+    if (!srv) return;
+    const sRect = srv.getBoundingClientRect();
+    const tx = sRect.left - stageRect.left + sRect.width / 2;
+    const ty = sRect.top - stageRect.top + sRect.height / 2;
+
+    const col = item.gpus >= 8 ? "#a855f7" : item.gpus >= 4 ? "#3b82f6" : item.gpus >= 2 ? "#14b8a6" : "#60a5fa";
+    PARTICLES.push({
+      sx, sy: sy + (idx % 4) * 18,
+      tx, ty,
+      cx: (sx + tx) * 0.5,
+      cy: Math.min(sy, ty) - 35 - (idx % 3) * 15,
+      progress: 0,
+      speed: 0.045,
+      color: col,
+      gpus: item.gpus,
+    });
+  });
+}
+
+function drawFlowCanvas() {
+  const canvas = document.getElementById("flow-canvas");
+  const stage = document.getElementById("sim-stage");
+  if (!canvas || !stage) return;
+
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, w, h);
+
+  for (let i = PARTICLES.length - 1; i >= 0; i--) {
+    const p = PARTICLES[i];
+    p.progress += p.speed;
+    if (p.progress >= 1) {
+      RIPPLES.push({ x: p.tx, y: p.ty, r: 4, alpha: 0.9, color: p.color });
+      PARTICLES.splice(i, 1);
+      continue;
+    }
+
+    // Quadratic Bezier point at t = easeOutCubic(p.progress)
+    const t = 1 - Math.pow(1 - p.progress, 3);
+    const omt = 1 - t;
+    const x = omt * omt * p.sx + 2 * omt * t * p.cx + t * t * p.tx;
+    const y = omt * omt * p.sy + 2 * omt * t * p.cy + t * t * p.ty;
+
+    // Subtle faint guide trail
+    ctx.beginPath();
+    ctx.moveTo(p.sx, p.sy);
+    ctx.quadraticCurveTo(p.cx, p.cy, x, y);
+    ctx.strokeStyle = p.color + "44";
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Glowing packet head
+    ctx.beginPath();
+    ctx.arc(x, y, p.gpus >= 4 ? 5 : 3.8, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  for (let i = RIPPLES.length - 1; i >= 0; i--) {
+    const r = RIPPLES[i];
+    r.r += 1.2;
+    r.alpha -= 0.045;
+    if (r.alpha <= 0) {
+      RIPPLES.splice(i, 1);
+      continue;
+    }
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+    ctx.strokeStyle = r.color;
+    ctx.globalAlpha = r.alpha;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Queue, Decision Spotlight, Chart & Event Stream
+// ---------------------------------------------------------------------------
+function renderQueueBlocks() {
+  const s = SNAPSHOT;
+  document.getElementById("q-count-pill").textContent = `${s.metrics.waiting} waiting`;
+  const box = document.getElementById("queue-blocks");
+
+  if (s.queue.length === 0) {
+    box.innerHTML = `<div class="py-10 text-center text-xs text-slate-500">Queue empty — all arrived jobs placed.</div>`;
+    return;
+  }
+
+  box.innerHTML = s.queue.slice(0, 7).map(j => {
+    const gCls = j.gpus >= 8 ? "g8" : j.gpus >= 4 ? "g4" : j.gpus >= 2 ? "g2" : "g1";
+    let pips = "";
+    for (let i = 0; i < j.gpus; i++) pips += `<span class="pip ${gCls}"></span>`;
+
+    const badge = j.protected
+      ? `<span class="tag tag-amber">PROTECTED</span>`
+      : `<span class="mono text-[11px] text-slate-400">${Math.round(j.waited)}s</span>`;
+
+    return `<div class="q-item ${j.protected ? "protected" : ""}">
+      <div class="flex items-center gap-2.5">
+        <div class="gpu-pips">${pips}</div>
+        <div>
+          <div class="mono text-xs font-semibold text-white">Job #${j.job_id}</div>
+          <div class="text-[10.5px] text-slate-400">${j.gpus} GPU${j.gpus > 1 ? "s" : ""} · ${Math.round(j.duration)}s</div>
         </div>
       </div>
-      <div class="flex flex-wrap gap-1.5">${nodesHtml}</div>
+      ${badge}
     </div>`;
   }).join("");
 }
 
-function drawDispatchBeams() {
-  const svg = document.getElementById("dispatch-svg");
-  const stage = document.getElementById("sim-stage");
-  if (!svg || !stage || !SNAPSHOT) return;
+function renderDecisionSpotlight() {
+  const d = SNAPSHOT?.last_decision;
+  const box = document.getElementById("decision-spotlight");
+  document.getElementById("decision-clock").textContent = d ? `t = ${d.time}s` : "";
 
-  const started = (SNAPSHOT.step_started || []).filter(x => x.placement).slice(0, 6);
-  if (started.length === 0) {
-    svg.innerHTML = "";
+  if (!d) {
+    box.innerHTML = `<span class="text-slate-500">Waiting for first placement decision...</span>`;
     return;
   }
 
-  const stageRect = stage.getBoundingClientRect();
-  const qBox = document.getElementById("queue-blocks");
-  const qRect = qBox.getBoundingClientRect();
-  const startX = qRect.right - stageRect.left - 8;
-  const startY = qRect.top - stageRect.top + 36;
-
-  let paths = "";
-  started.forEach(item => {
-    const [cid, sid] = item.placement;
-    const node = document.getElementById(`node-${cid}_${sid}`);
-    if (!node) return;
-    const nRect = node.getBoundingClientRect();
-    // Skip beams for scrolled-out-of-view nodes
-    if (nRect.top < stageRect.top || nRect.bottom > stageRect.bottom + 20) return;
-
-    const endX = nRect.left - stageRect.left + 8;
-    const endY = nRect.top - stageRect.top + nRect.height / 2;
-    const midX = (startX + endX) / 2;
-    paths += `<path class="beam-path" d="M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}" />`;
-    paths += `<circle cx="${endX}" cy="${endY}" r="3.5" fill="#60a5fa" />`;
-  });
-  svg.innerHTML = paths;
+  const placed = d.placements.find(p => p.job_id === d.focal_job_id);
+  const cand = d.candidates.find(c => c.selected);
+  box.innerHTML = `
+    <div class="flex items-center justify-between mb-1.5">
+      <span class="mono font-semibold text-white">Job #${d.focal_job_id} (${d.focal_gpus}G)</span>
+      ${placed
+        ? `<span class="tag tag-teal">→ C${placed.cluster_id} · S${placed.server_id}</span>`
+        : `<span class="tag tag-amber">Waiting</span>`}
+    </div>
+    ${cand ? `<div class="flex justify-between text-[11px] mono bg-[#0b0d11] px-2.5 py-1.5 rounded border border-[#242936]">
+      <span>G: <strong class="text-blue-400">${cand.g_orig.toFixed(3)}</strong></span>
+      <span>σ²: <strong class="text-teal-400">${cand.sigma2.toFixed(4)}</strong></span>
+      <span>Score v: <strong class="text-white">${cand.score.toFixed(3)}</strong></span>
+    </div>` : ""}`;
 }
 
 function renderLiveChart() {
   const tl = SNAPSHOT?.timeline || [];
-  const labels = tl.map(p => `${Math.round(p.t)}s`);
-  const utils = tl.map(p => p.util);
-  const qlens = tl.map(p => p.queue_len);
+  // Show the most recent ~90 points so the live curve streams naturally
+  const recent = tl.slice(-90);
+  const labels = recent.map(p => `${Math.round(p.t)}s`);
+  const utils = recent.map(p => p.util);
+  const qlens = recent.map(p => p.queue_len);
 
   if (!CHARTS.live) {
     CHARTS.live = new Chart(document.getElementById("chart-live-telemetry"), {
@@ -526,17 +666,17 @@ function renderLiveChart() {
       data: {
         labels,
         datasets: [
-          { label: "GPU Util (%)", data: utils, borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.1)", fill: true, tension: 0.25, pointRadius: 0, borderWidth: 2, yAxisID: "y" },
-          { label: "Queue Length", data: qlens, borderColor: "#f59e0b", tension: 0.25, pointRadius: 0, borderWidth: 1.8, yAxisID: "y1" },
+          { label: "GPU Util (%)", data: utils, borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.12)", fill: true, tension: 0.25, pointRadius: 0, borderWidth: 2, yAxisID: "y" },
+          { label: "Waiting Queue", data: qlens, borderColor: "#f59e0b", tension: 0.25, pointRadius: 0, borderWidth: 1.8, yAxisID: "y1" },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        plugins: { legend: { labels: { color: "#9aa4b5", boxWidth: 10, font: { size: 11 } } } },
+        plugins: { legend: { labels: { color: "#94a0b2", boxWidth: 10, font: { size: 11 } } } },
         scales: {
-          x: { ticks: { color: "#667085", maxTicksLimit: 7, font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+          x: { ticks: { color: "#647084", maxTicksLimit: 6, font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
           y: { position: "left", min: 0, max: 100, ticks: { color: "#60a5fa", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.05)" } },
           y1: { position: "right", min: 0, ticks: { color: "#fbbf24", font: { size: 10 } }, grid: { drawOnChartArea: false } },
         },
@@ -553,23 +693,22 @@ function renderLiveChart() {
 function renderEventTicker() {
   const evs = SNAPSHOT?.recent_events || [];
   const n1 = SNAPSHOT?.n1_log || [];
-  document.getElementById("n1-event-count").textContent = n1.length ? `${n1.length} N1 actions` : "";
-
+  document.getElementById("n1-event-count").textContent = n1.length ? `${n1.length} N1 guards` : "";
   const box = document.getElementById("event-ticker");
-  if (evs.length === 0) {
-    box.innerHTML = `<div class="text-slate-500 py-6 text-center">Waiting for events...</div>`;
+  if (!evs.length) {
+    box.innerHTML = `<div class="text-slate-500 py-4 text-center">No events yet.</div>`;
     return;
   }
-  box.innerHTML = evs.slice(0, 12).map(ev => {
-    const cls = ev.event === "start" ? "tag-blue" : ev.event === "finish" ? "tag-teal" : ev.event === "reject" ? "tag-red" : "tag-dim";
-    const loc = ev.placement ? `→ C${ev.placement[0]}·S${ev.placement[1]}` : (ev.wait !== null ? `waited ${ev.wait}s` : "");
+  box.innerHTML = evs.slice(0, 6).map(ev => {
+    const cls = ev.event === "start" ? "tag-blue" : ev.event === "finish" ? "tag-teal" : "tag-dim";
+    const info = ev.placement ? `C${ev.placement[0]}·S${ev.placement[1]}` : "";
     return `<div class="flex items-center justify-between py-1 border-b border-white/5">
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5">
         <span class="tag ${cls}">${ev.event.toUpperCase()}</span>
-        <span class="mono text-white">Job #${ev.job_id}</span>
+        <span class="mono text-white">#${ev.job_id}</span>
         <span class="mono text-slate-400">${ev.gpus}G</span>
       </div>
-      <div class="mono text-[11px] text-slate-400">${loc} @ ${ev.time}s</div>
+      <span class="mono text-[11px] text-slate-400">${info} · ${ev.time}s</span>
     </div>`;
   }).join("");
 }
@@ -584,7 +723,7 @@ async function runComparisonArena() {
 
   const btn = document.getElementById("btn-run-cmp");
   btn.disabled = true;
-  btn.textContent = `Running ${selected.length} policies...`;
+  btn.textContent = `Running ${selected.length}...`;
   try {
     const data = await apiPost("/api/compare", {
       trace_id: document.getElementById("cmp-trace").value,
@@ -606,7 +745,6 @@ async function runComparisonArena() {
 function renderComparison(data) {
   document.getElementById("cmp-placeholder").classList.add("hidden");
   document.getElementById("cmp-results-wrap").classList.remove("hidden");
-
   const meta = data.meta;
   document.getElementById("cmp-meta-badge").textContent = `${meta.trace_id} · ${meta.topo_id} · ${meta.n_jobs} jobs · η=${meta.eta}`;
 
@@ -634,10 +772,10 @@ function renderComparison(data) {
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: "#9aa4b5", font: { size: 11 } } } },
+    plugins: { legend: { labels: { color: "#94a0b2", font: { size: 11 } } } },
     scales: {
-      x: { ticks: { color: "#9aa4b5", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-      y: { ticks: { color: "#9aa4b5", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.06)" } },
+      x: { ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+      y: { ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.06)" } },
     },
   };
 
@@ -679,7 +817,7 @@ function exportComparisonCSV() {
 }
 
 // ---------------------------------------------------------------------------
-// TAB 3: Fairness & Heterogeneity (N1 & N2)
+// TAB 3: Fairness & Heterogeneity
 // ---------------------------------------------------------------------------
 async function runN2Inspector() {
   const data = await apiPost("/api/experiments/inspect_n2", {
@@ -694,13 +832,13 @@ async function runN2Inspector() {
 
   const eg = data.empty_gradients;
   document.getElementById("n2-gradient-cards").innerHTML = `
-    <div class="bg-[#0b0d11] border border-[#252a36] rounded-lg p-3 text-xs mono space-y-1">
+    <div class="bg-[#0b0d11] border border-[#242936] rounded-lg p-3 text-xs mono space-y-1">
       <div class="font-semibold text-slate-200 font-sans mb-1">4-GPU Server Gradient</div>
       <div class="flex justify-between"><span class="text-slate-400">Original G:</span><span class="text-blue-400">${eg.server_4g.G_orig}</span></div>
       <div class="flex justify-between"><span class="text-slate-400">F_C (Truncated):</span><span class="text-amber-400">${eg.server_4g.G_fc}</span></div>
       <div class="flex justify-between"><span class="text-slate-400">F_C (Renormed):</span><span class="text-purple-400">${eg.server_4g.G_fc_norm}</span></div>
     </div>
-    <div class="bg-[#0b0d11] border border-[#252a36] rounded-lg p-3 text-xs mono space-y-1">
+    <div class="bg-[#0b0d11] border border-[#242936] rounded-lg p-3 text-xs mono space-y-1">
       <div class="font-semibold text-slate-200 font-sans mb-1">8-GPU Server Gradient</div>
       <div class="flex justify-between"><span class="text-slate-400">Original G:</span><span class="text-blue-400">${eg.server_8g.G_orig}</span></div>
       <div class="flex justify-between"><span class="text-slate-400">F_C (Truncated):</span><span class="text-amber-400">${eg.server_8g.G_fc}</span></div>
@@ -722,10 +860,10 @@ async function runN2Inspector() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: "#9aa4b5", font: { size: 11 } } } },
+      plugins: { legend: { labels: { color: "#94a0b2", font: { size: 11 } } } },
       scales: {
-        x: { ticks: { color: "#9aa4b5", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-        y: { min: 0, ticks: { color: "#9aa4b5", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.06)" } },
+        x: { ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: { min: 0, ticks: { color: "#94a0b2", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.06)" } },
       },
     },
   });
@@ -745,10 +883,10 @@ function showSavedStudy(kind) {
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: "#9aa4b5", font: { size: 11 } } } },
+    plugins: { legend: { labels: { color: "#94a0b2", font: { size: 11 } } } },
     scales: {
-      x: { ticks: { color: "#9aa4b5", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-      y: { ticks: { color: "#9aa4b5", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.06)" } },
+      x: { ticks: { color: "#94a0b2", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+      y: { ticks: { color: "#94a0b2", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.06)" } },
     },
   };
 
@@ -791,13 +929,13 @@ function showSavedStudy(kind) {
       ${rows.map(r => `<tr><td class="mono text-white">${r.label}</td><td class="mono">${Math.round(r.avg_wait).toLocaleString()}s</td><td class="mono">${Math.round(r.p99_wait).toLocaleString()}s</td><td class="mono">${r.starved_3x}</td></tr>`).join("")}
     </tbody></table>`;
   } else if (kind === "e7" && SAVED_RESEARCH.e7_norm) {
-    const normRows = SAVED_RESEARCH.e7_norm.filter(r => r.window === "dynamic");
-    const raw = normRows.filter(r => !r.normalize);
-    const norm = normRows.filter(r => r.normalize);
+    const normRows = SAVED_RESEARCH.e7_norm.filter(r => r.kwargs?.window === "dynamic");
+    const raw = normRows.filter(r => r.scheduler === "mcg" || (r.label || "").startsWith("raw"));
+    const norm = normRows.filter(r => r.scheduler === "mcg_norm" || (r.label || "").startsWith("norm"));
     CHARTS.saved = new Chart(chartEl, {
       type: "line",
       data: {
-        labels: raw.map(r => `w=${r.w}`),
+        labels: raw.map(r => `w=${r.kwargs?.w}`),
         datasets: [
           { label: "Raw Score", data: raw.map(r => r.avg_wait), borderColor: "#3b82f6", borderWidth: 2 },
           { label: "Normalised Score", data: norm.map(r => r.avg_wait), borderColor: "#8b5cf6", borderWidth: 2 },
@@ -806,7 +944,7 @@ function showSavedStudy(kind) {
       options: opts,
     });
     tblEl.innerHTML = `<table class="tbl"><thead><tr><th>w</th><th>Raw Avg Wait</th><th>Normalised Avg Wait</th></tr></thead><tbody>
-      ${raw.map((r, i) => `<tr><td class="mono">${r.w}</td><td class="mono">${Math.round(r.avg_wait).toLocaleString()}s</td><td class="mono">${Math.round(norm[i]?.avg_wait || 0).toLocaleString()}s</td></tr>`).join("")}
+      ${raw.map((r, i) => `<tr><td class="mono">${r.kwargs?.w}</td><td class="mono">${Math.round(r.avg_wait).toLocaleString()}s</td><td class="mono">${Math.round(norm[i]?.avg_wait || 0).toLocaleString()}s</td></tr>`).join("")}
     </tbody></table>`;
   }
 }
